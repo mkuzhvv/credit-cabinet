@@ -7,20 +7,17 @@ from pathlib import Path
 from urllib.request import Request, urlopen
 
 
-# Файлы ищем рядом со скриптом, независимо от папки запуска.
 ROOT = Path(__file__).resolve().parent
 DEFAULT_MODEL = "qwen3:8b"
 DEFAULT_URL = "http://localhost:11434"
 
 
 def build_system_prompt():
-    """Собираем инструкцию, каталог продуктов и описания полей в один текст."""
+
     instruction = (ROOT / "system_prompt.txt").read_text(encoding="utf-8")
     products = json.loads((ROOT / "products.json").read_text(encoding="utf-8"))
     fields = json.loads((ROOT / "fields.json").read_text(encoding="utf-8"))
 
-    # Файлы перечитываются при каждом вопросе: изменения сразу попадут в запрос.
-    # ensure_ascii=False сохраняет русский текст в читаемом виде.
     products_text = json.dumps(products, ensure_ascii=False, indent=2)
     fields_text = json.dumps(fields, ensure_ascii=False, indent=2)
 

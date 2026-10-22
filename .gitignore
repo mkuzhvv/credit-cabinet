@@ -1,5 +1,36 @@
-.venv/
-__pycache__/
-*.pyc
-.DS_Store
+# Local environment files; keep templates in Git
 .env
+.env.*
+!.env.example
+!.env.*.example
+
+# IDE and OS files
+.idea/
+*.iml
+.DS_Store
+Thumbs.db
+
+# Java and Gradle build output
+target/
+build/
+.gradle/
+
+# Frontend dependencies and generated files
+node_modules/
+dist/
+.next/
+.vite/
+coverage/
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Runtime logs
+*.log
