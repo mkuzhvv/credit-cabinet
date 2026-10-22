@@ -7,9 +7,11 @@
 ```text
 credit-cabinet/
 ├── backend/     # Java-бэкенд: API, бизнес-логика, БД и миграции
-├── frontend/    # Веб-интерфейс клиента и сотрудника банка
+├── frontend/    # Веб-кабинет предпринимателя
 ├── ml/          # ML-модели, обучение, оценка и сервисы моделей
 ├── docs/        # Требования, архитектура, API и сценарии проверки
+│   ├── BACKEND_ARCHITECTURE.md  # Стек и архитектура бэкенда
+│   └── BACKEND_SCENARIOS.md     # Сценарии и принятые решения
 ├── docker/      # Общий Docker Compose и конфигурация окружения
 ├── .gitignore
 └── README.md
@@ -22,6 +24,11 @@ credit-cabinet/
 - [ML](ml/README.md)
 - [Документация](docs/README.md)
 - [Общий запуск в Docker](docker/README.md)
+
+Документы для согласования реализации и API:
+
+- [Архитектура и стек бэкенда](docs/BACKEND_ARCHITECTURE.md).
+- [Сценарии и принятые решения](docs/BACKEND_SCENARIOS.md).
 
 ## Где размещать файлы
 
