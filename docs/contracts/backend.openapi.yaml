@@ -1,0 +1,2309 @@
+openapi: 3.1.1
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: Credit Cabinet — Backend API
+  version: 0.1.0
+  description: 'Контракт фронтенда с Java. Все примеры синтетические; условия и порог решения не
+    утверждены. Общие правила и список допущений: README.md. Сессия cookie, без JWT. Все изменяющие запросы защищены
+    CSRF. Требования полей при сохранении и отправке различаются.'
+servers:
+- url: /api/v1
+  description: Один origin через frontend proxy / общий reverse proxy.
+tags:
+- name: Session
+- name: Products
+- name: Applications
+- name: Processing
+- name: Assistant
+security:
+- SessionCookie: []
+paths:
+  /csrf:
+    get:
+      operationId: getCsrfToken
+      tags:
+      - Session
+      summary: Получить CSRF-токен
+      security: []
+      description: Разрешено без входа. Создаёт анонимную сессию при необходимости; пользователь ещё не аутентифицирован.
+        Повторить после успешного демовхода, поскольку старый CSRF-токен сбрасывается.
+      responses:
+        '200':
+          description: Токен текущей, в том числе анонимной, сессии.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CsrfView'
+              example:
+                token: example-csrf-token
+                headerName: X-CSRF-TOKEN
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /demo/session:
+    post:
+      operationId: initializeDemoSession
+      tags:
+      - Session
+      summary: Автоматически войти в демоаккаунт
+      security:
+      - SessionCookie: []
+        CsrfToken: []
+      description: 'Только demo-профиль. Разрешено анонимной сессии, созданной GET /csrf; нужны её cookie и CSRF-токен.
+        Без тела: аккаунт и компания выбираются сервером. При первом входе ID сессии меняется. Повтор действующей
+        сессии не меняет пользователя. После успеха вызвать GET /csrf. Вне demo-профиля — 404.'
+      responses:
+        '200':
+          description: Сессия создана или уже существует.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Set-Cookie:
+              $ref: '#/components/headers/SetCookie'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserView'
+              example:
+                user:
+                  id: b827db91-df42-4d75-b5e0-8f0a7a512ee1
+                  displayName: Демо-представитель
+                company:
+                  id: 97daa92f-127c-4f70-8a0c-0711f13c62ef
+                  name: Демо-пекарня
+                  legalForm: OOO
+                  registrationDate: '2019-08-01'
+                demo: true
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /me:
+    get:
+      operationId: getCurrentUser
+      tags:
+      - Session
+      summary: Получить пользователя и компанию
+      responses:
+        '200':
+          description: Текущий контекст.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CurrentUserView'
+              example:
+                user:
+                  id: b827db91-df42-4d75-b5e0-8f0a7a512ee1
+                  displayName: Демо-представитель
+                company:
+                  id: 97daa92f-127c-4f70-8a0c-0711f13c62ef
+                  name: Демо-пекарня
+                  legalForm: OOO
+                  registrationDate: '2019-08-01'
+                demo: true
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /products:
+    get:
+      operationId: listProducts
+      tags:
+      - Products
+      summary: Получить действующий каталог
+      responses:
+        '200':
+          description: Каталог MVP; числа примера иллюстративны.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProductList'
+              example:
+                items:
+                - code: WORKING_CAPITAL
+                  name: Оборотный кредит
+                  description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+                  terms:
+                    version: demo-working-capital-1
+                    currency: RUB
+                    minAmount: '100000.00'
+                    maxAmount: '2000000.00'
+                    minTermMonths: 3
+                    maxTermMonths: 18
+                    annualRatePercent: '20.00'
+                    minBusinessAgeMonths: 12
+                    disbursementDescription: Получение одной суммой.
+                    repaymentDescription: Возврат по согласованному демонстрационному графику.
+                - code: EQUIPMENT
+                  name: Кредит на оборудование
+                  description: Приобретение оборудования для бизнеса.
+                  terms:
+                    version: demo-equipment-1
+                    currency: RUB
+                    minAmount: '200000.00'
+                    maxAmount: '4000000.00'
+                    minTermMonths: 6
+                    maxTermMonths: 36
+                    annualRatePercent: '18.00'
+                    minBusinessAgeMonths: 12
+                    disbursementDescription: Получение одной суммой.
+                    repaymentDescription: Возврат по согласованному демонстрационному графику.
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /applications:
+    post:
+      operationId: createApplication
+      tags:
+      - Applications
+      summary: Создать черновик
+      security:
+      - SessionCookie: []
+        CsrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+            example:
+              productCode: WORKING_CAPITAL
+      description: Связывает черновик с текущей компанией и представителем. Пользователь, компания, ставка и состояние
+        не принимаются от фронта. Неизвестный/недоступный продукт — 422. Повтор создания с тем же ключом возвращает
+        исходный результат команды; актуальная заявка читается GET-операцией.
+      responses:
+        '201':
+          description: Создан новый DRAFT.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationView'
+              example:
+                id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                version: 0
+                status: DRAFT
+                product:
+                  code: WORKING_CAPITAL
+                  name: Оборотный кредит
+                  description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+                  terms:
+                    version: demo-working-capital-1
+                    currency: RUB
+                    minAmount: '100000.00'
+                    maxAmount: '2000000.00'
+                    minTermMonths: 3
+                    maxTermMonths: 18
+                    annualRatePercent: '20.00'
+                    minBusinessAgeMonths: 12
+                    disbursementDescription: Получение одной суммой.
+                    repaymentDescription: Возврат по согласованному демонстрационному графику.
+                reportingPeriod:
+                  startDate: '2025-10-01'
+                  endDate: '2026-09-30'
+                  months: 12
+                form:
+                  amount: null
+                  termMonths: null
+                  averageMonthlyInflow: null
+                  averageMonthlyOutflow: null
+                  equipment: null
+                assessmentId: null
+                lastSubmittedAt: null
+                decision: null
+                requiredInformation: []
+                processingError: null
+                allowedActions:
+                - UPDATE_FORM
+                - SUBMIT
+                createdAt: '2026-10-22T10:00:00Z'
+                updatedAt: '2026-10-22T10:00:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    get:
+      operationId: listApplications
+      tags:
+      - Applications
+      summary: Получить заявки текущей компании
+      parameters:
+      - name: page
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          default: 0
+      - name: size
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+      - name: status
+        in: query
+        schema:
+          $ref: '#/components/schemas/ApplicationStatus'
+      description: Фильтрация по правам выполняется сервером. Порядок updatedAt DESC, id DESC. Страница за пределами
+        списка возвращает items=[].
+      responses:
+        '200':
+          description: Страница заявок.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationPage'
+              example:
+                items:
+                - id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                  productCode: WORKING_CAPITAL
+                  productName: Оборотный кредит
+                  status: DRAFT
+                  amount: '500000.00'
+                  termMonths: 12
+                  version: 1
+                  updatedAt: '2026-10-22T10:01:00Z'
+                page: 0
+                size: 20
+                totalElements: 1
+                totalPages: 1
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /applications/{applicationId}:
+    get:
+      operationId: getApplication
+      tags:
+      - Applications
+      summary: Прочитать заявку, состояние и решение
+      parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+      description: Используется для восстановления формы и опроса состояния. В CHECKING опрашивать примерно раз в
+        2 секунды; остановиться при выходе из CHECKING или уходе со страницы. Отсутствующая и чужая заявка дают одинаковый
+        404.
+      responses:
+        '200':
+          description: Актуальная заявка. DECLINED и TECHNICAL_HOLD также возвращаются с HTTP 200.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationView'
+              examples:
+                draft:
+                  $ref: '#/components/examples/ApplicationDraft'
+                checking:
+                  $ref: '#/components/examples/ApplicationChecking'
+                needs_info:
+                  $ref: '#/components/examples/ApplicationNeedsInfo'
+                technical_hold:
+                  $ref: '#/components/examples/ApplicationTechnicalHold'
+                approved:
+                  $ref: '#/components/examples/ApplicationApproved'
+                declined:
+                  $ref: '#/components/examples/ApplicationDeclined'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /applications/{applicationId}/form:
+    put:
+      operationId: saveApplicationForm
+      tags:
+      - Applications
+      summary: Заменить содержимое формы
+      security:
+      - SessionCookie: []
+        CsrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SaveFormRequest'
+            example:
+              expectedVersion: 0
+              form:
+                amount: '500000.00'
+                termMonths: 12
+                averageMonthlyInflow: '1200000.00'
+                averageMonthlyOutflow: '800000.00'
+                equipment: null
+      description: Только DRAFT и NEEDS_INFO. Все ключи form обязательны; null очищает поле. В NEEDS_INFO изменяются
+        только запрошенные поля; остальные передаются без изменений. Продукт неизменяем. При конфликте версии — 409
+        VERSION_CONFLICT, при запрещённом состоянии — 409 INVALID_APPLICATION_STATE. Некорректное сохранение не применяется
+        частично. Автосохранение фронт выполняет последовательно; перед submit дожидается последнего успешного сохранения.
+        Потерянный ответ PUT проверяется чтением заявки, не слепым повтором с новым содержимым.
+      responses:
+        '200':
+          description: Сохранённая заявка с актуальной версией.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApplicationView'
+              example:
+                id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                version: 1
+                status: DRAFT
+                product:
+                  code: WORKING_CAPITAL
+                  name: Оборотный кредит
+                  description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+                  terms:
+                    version: demo-working-capital-1
+                    currency: RUB
+                    minAmount: '100000.00'
+                    maxAmount: '2000000.00'
+                    minTermMonths: 3
+                    maxTermMonths: 18
+                    annualRatePercent: '20.00'
+                    minBusinessAgeMonths: 12
+                    disbursementDescription: Получение одной суммой.
+                    repaymentDescription: Возврат по согласованному демонстрационному графику.
+                reportingPeriod:
+                  startDate: '2025-10-01'
+                  endDate: '2026-09-30'
+                  months: 12
+                form:
+                  amount: '500000.00'
+                  termMonths: 12
+                  averageMonthlyInflow: '1200000.00'
+                  averageMonthlyOutflow: '800000.00'
+                  equipment: null
+                assessmentId: null
+                lastSubmittedAt: null
+                decision: null
+                requiredInformation: []
+                processingError: null
+                allowedActions:
+                - UPDATE_FORM
+                - SUBMIT
+                createdAt: '2026-10-22T10:00:00Z'
+                updatedAt: '2026-10-22T10:01:00Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /applications/{applicationId}/submit:
+    post:
+      operationId: submitApplication
+      tags:
+      - Processing
+      summary: Отправить сохранённую заявку в фон
+      security:
+      - SessionCookie: []
+        CsrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SubmitRequest'
+            example:
+              expectedVersion: 1
+              expectedProductTermsVersion: demo-working-capital-1
+      description: DRAFT или NEEDS_INFO. Проверяет полноту сохранённой формы. Новый набор данных не принимает. Создаёт
+        снимок, assessmentId, CHECKING и задание одной транзакцией. Изменившиеся условия — 409 PRODUCT_TERMS_CHANGED
+        с currentProductTermsVersion; фронт показывает их до новой отправки. Повтор ключа возвращает тот же assessmentId
+        и исходное 202-подтверждение, даже если рассмотрение завершено. Для актуального состояния читать GET. Другой
+        ключ при активной проверке — 409 APPLICATION_ALREADY_SUBMITTED.
+      responses:
+        '202':
+          description: Данные и задание сохранены, рассмотрение принято.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessingAccepted'
+              example:
+                applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+                status: CHECKING
+                version: 2
+                acceptedAt: '2026-10-22T10:02:00Z'
+                statusUrl: /api/v1/applications/7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                pollAfterSeconds: 2
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /applications/{applicationId}/retry:
+    post:
+      operationId: retryApplicationAssessment
+      tags:
+      - Processing
+      summary: Повторить прерванную проверку
+      security:
+      - SessionCookie: []
+        CsrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/ApplicationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RetryRequest'
+            example:
+              expectedVersion: 3
+      description: Только TECHNICAL_HOLD. Новый assessmentId; та же заявка, данные и условия предыдущей попытки. Это
+        технический повтор, а не новая подача по новым условиям. Неверное состояние — 409 INVALID_APPLICATION_STATE.
+        Тот же ключ возвращает исходное подтверждение команды; параллельная независимая проверка не создаётся.
+      responses:
+        '202':
+          description: Новая попытка по сохранённому снимку.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProcessingAccepted'
+              example:
+                applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                assessmentId: 4291d654-056e-4a52-ad52-c31e43a168f7
+                status: CHECKING
+                version: 4
+                acceptedAt: '2026-10-22T10:03:00Z'
+                statusUrl: /api/v1/applications/7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                pollAfterSeconds: 2
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /assistant/conversations:
+    post:
+      operationId: createAssistantConversation
+      tags:
+      - Assistant
+      summary: Создать диалог помощника
+      security:
+      - SessionCookie: []
+        CsrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/IdempotencyKey'
+      description: Без тела. Диалог доступен до создания заявки. ID диалога фронт сохраняет для восстановления истории.
+        Успешное создание повторяется по Idempotency-Key.
+      responses:
+        '201':
+          description: Создан диалог текущей компании и пользователя.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+            Location:
+              $ref: '#/components/headers/Location'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ConversationView'
+              example:
+                id: 94061bb0-46fe-4c52-96c2-9a05c3766b13
+                createdAt: '2026-10-22T10:00:00Z'
+                updatedAt: '2026-10-22T10:00:00Z'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '500':
+          $ref: '#/components/responses/InternalError'
+  /assistant/conversations/{conversationId}/messages:
+    get:
+      operationId: listAssistantMessages
+      tags:
+      - Assistant
+      summary: Получить историю диалога
+      parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - name: afterSequence
+        in: query
+        schema:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+          default: 0
+      - name: limit
+        in: query
+        schema:
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 50
+      description: Возвращает sequence > afterSequence. Если items пуст, lastSequence равен afterSequence. hasMore
+        показывает наличие следующей страницы. Чужой диалог — 404.
+      responses:
+        '200':
+          description: Сообщения по возрастанию sequence.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessagePage'
+              example:
+                items:
+                - id: 2ba1c7a6-c071-4698-bce2-5925d6fde109
+                  sequence: 1
+                  role: USER
+                  text: Хочу купить печь для пекарни. Какой кредит выбрать?
+                  recommendedProductCode: null
+                  replyToMessageId: null
+                  createdAt: '2026-10-22T10:00:00Z'
+                - id: 9fd9f28f-285a-4447-bb2d-37f21b18c82a
+                  sequence: 2
+                  role: ASSISTANT
+                  text: Для покупки печи подходит кредит на оборудование. Откройте условия этого продукта.
+                  recommendedProductCode: EQUIPMENT
+                  replyToMessageId: 2ba1c7a6-c071-4698-bce2-5925d6fde109
+                  createdAt: '2026-10-22T10:00:03Z'
+                lastSequence: 2
+                hasMore: false
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '500':
+          $ref: '#/components/responses/InternalError'
+    post:
+      operationId: sendAssistantMessage
+      tags:
+      - Assistant
+      summary: Получить ответ LLM
+      security:
+      - SessionCookie: []
+        CsrfToken: []
+      parameters:
+      - $ref: '#/components/parameters/ConversationId'
+      - $ref: '#/components/parameters/IdempotencyKey'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SendMessageRequest'
+            example:
+              text: Хочу купить печь для пекарни. Какой кредит выбрать?
+              context:
+                applicationId: null
+                productCode: null
+                fieldCode: null
+      description: Обычный JSON-ответ без streaming, бюджет генерации 60 секунд. Java сама получает историю, каталог,
+        определения полей и доступную заявку. Несовместимые productCode/applicationId или неизвестное поле — 422;
+        чужая заявка — 404 до вызова LLM. Один активный вызов на диалог; занятый диалог/незавершённая команда — 409
+        CONVERSATION_BUSY или OPERATION_IN_PROGRESS. Пара USER+ASSISTANT сохраняется атомарно после валидного ответа;
+        при сбое полупара не добавляется, фронт сохраняет введённый текст. Успешный повтор ключа не вызывает LLM и
+        не добавляет сообщения. После ошибки генерации тот же ключ можно повторить; до успеха контекст собирается
+        заново. Возврат после сбоя не даёт повода повторять создание заявки или менять её данные.
+      responses:
+        '200':
+          description: Вопрос и ответ сохранены.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MessageExchange'
+              example:
+                conversationId: 94061bb0-46fe-4c52-96c2-9a05c3766b13
+                userMessage:
+                  id: 2ba1c7a6-c071-4698-bce2-5925d6fde109
+                  sequence: 1
+                  role: USER
+                  text: Хочу купить печь для пекарни. Какой кредит выбрать?
+                  recommendedProductCode: null
+                  replyToMessageId: null
+                  createdAt: '2026-10-22T10:00:00Z'
+                assistantMessage:
+                  id: 9fd9f28f-285a-4447-bb2d-37f21b18c82a
+                  sequence: 2
+                  role: ASSISTANT
+                  text: Для покупки печи подходит кредит на оборудование. Откройте условия этого продукта.
+                  recommendedProductCode: EQUIPMENT
+                  replyToMessageId: 2ba1c7a6-c071-4698-bce2-5925d6fde109
+                  createdAt: '2026-10-22T10:00:03Z'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          $ref: '#/components/responses/Conflict'
+        '422':
+          $ref: '#/components/responses/ValidationFailed'
+        '502':
+          $ref: '#/components/responses/AssistantInvalidResponse'
+        '503':
+          $ref: '#/components/responses/AssistantUnavailable'
+        '504':
+          $ref: '#/components/responses/AssistantTimeout'
+        '500':
+          $ref: '#/components/responses/InternalError'
+components:
+  securitySchemes:
+    SessionCookie:
+      type: apiKey
+      in: cookie
+      name: JSESSIONID
+      description: HttpOnly session cookie. Swagger UI в браузере использует реальную cookie; её значение не вводится
+        в JSON.
+    CsrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
+      description: Получить GET /csrf и обновить после входа. Это защита cookie-запросов, не JWT.
+  parameters:
+    ApplicationId:
+      name: applicationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    ConversationId:
+      name: conversationId
+      in: path
+      required: true
+      schema:
+        type: string
+        format: uuid
+    IdempotencyKey:
+      name: Idempotency-Key
+      in: header
+      required: true
+      schema:
+        type: string
+        format: uuid
+      description: 'UUID одного действия. Область: пользователь + компания + операция + ресурс. Тот же ключ и тело
+        повторяют результат команды; другое тело — 409 IDEMPOTENCY_KEY_REUSED. Повтор распознаётся до проверки expectedVersion.
+        Успешные результаты хранятся минимум 24 часа в PostgreSQL, независимо от сессии.'
+  headers:
+    RequestId:
+      description: Идентификатор запроса для диагностики.
+      schema:
+        type: string
+        format: uuid
+    NoStore:
+      description: Ответ не кэшируется.
+      schema:
+        type: string
+        const: no-store
+    SetCookie:
+      description: 'При создании или смене сессии: JSESSIONID; HttpOnly; Path=/; SameSite=Lax. Secure включается при
+        HTTPS. JavaScript не читает cookie.'
+      schema:
+        type: string
+    Location:
+      description: Адрес созданного ресурса или состояния принятой обработки.
+      schema:
+        type: string
+        format: uri-reference
+  responses:
+    BadRequest:
+      description: Неверный формат запроса
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:malformed-request
+            title: Неверный формат запроса
+            status: 400
+            code: MALFORMED_REQUEST
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    Unauthorized:
+      description: Создайте демосессию
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:session-required
+            title: Создайте демосессию
+            status: 401
+            code: SESSION_REQUIRED
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    Forbidden:
+      description: Обновите защитный токен запроса
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:csrf-invalid
+            title: Обновите защитный токен запроса
+            status: 403
+            code: CSRF_INVALID
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    NotFound:
+      description: Ресурс не найден
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:not-found
+            title: Ресурс не найден
+            status: 404
+            code: NOT_FOUND
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    Conflict:
+      description: Заявка уже изменена
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:version-conflict
+            title: Заявка уже изменена
+            status: 409
+            code: VERSION_CONFLICT
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+            currentVersion: 2
+    ValidationFailed:
+      description: Проверьте поля
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:validation-failed
+            title: Проверьте поля
+            status: 422
+            code: VALIDATION_FAILED
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+            errors:
+            - field: form.amount
+              code: POSITIVE_REQUIRED
+              message: Укажите сумму больше нуля
+    InternalError:
+      description: Не удалось выполнить запрос
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:internal-error
+            title: Не удалось выполнить запрос
+            status: 500
+            code: INTERNAL_ERROR
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    AssistantInvalidResponse:
+      description: Помощник вернул некорректный ответ
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:assistant-invalid-response
+            title: Помощник вернул некорректный ответ
+            status: 502
+            code: ASSISTANT_INVALID_RESPONSE
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    AssistantUnavailable:
+      description: Помощник временно недоступен
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:assistant-unavailable
+            title: Помощник временно недоступен
+            status: 503
+            code: ASSISTANT_UNAVAILABLE
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    AssistantTimeout:
+      description: Помощник не успел ответить
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:assistant-timeout
+            title: Помощник не успел ответить
+            status: 504
+            code: ASSISTANT_TIMEOUT
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+  schemas:
+    Money:
+      type: string
+      minLength: 4
+      maxLength: 15
+      pattern: ^(0|[1-9][0-9]{0,11})\.[0-9]{2}$
+      description: Неотрицательная сумма в рублях, ровно две цифры после точки. Java BigDecimal / Python Decimal.
+        Это технический диапазон, не лимит продукта.
+    PositiveMoney:
+      type: string
+      minLength: 4
+      maxLength: 15
+      pattern: ^(0|[1-9][0-9]{0,11})\.[0-9]{2}$
+      description: Положительная сумма в RUB, ровно две цифры после точки.
+      not:
+        const: '0.00'
+    ProductCode:
+      type: string
+      minLength: 2
+      maxLength: 64
+      pattern: ^[A-Z][A-Z0-9_]{1,63}$
+      description: 'Стабильный код из каталога. MVP: WORKING_CAPITAL и EQUIPMENT; список не зашит в enum.'
+    FieldCode:
+      type: string
+      minLength: 1
+      maxLength: 120
+      pattern: ^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)*$
+      description: Путь поля, например form.amount или form.equipment.name.
+    Version:
+      type: integer
+      minimum: 0
+      format: int64
+      maximum: 9007199254740991
+      description: Версия заявки. Меняется при изменении данных или состояния; безопасна для JavaScript Number.
+    ReportingPeriod:
+      type: object
+      additionalProperties: false
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        months:
+          type: integer
+          const: 12
+      required:
+      - startDate
+      - endDate
+      - months
+      description: 12 полных календарных месяцев до месяца создания черновика; границы включительно. Фиксируется сервером
+        и не сдвигается при повторной отправке.
+    FieldIssue:
+      type: object
+      additionalProperties: false
+      properties:
+        field:
+          $ref: '#/components/schemas/FieldCode'
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[A-Z][A-Z0-9_]*$
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+      required:
+      - field
+      - code
+      - message
+    Problem:
+      type: object
+      additionalProperties: true
+      required:
+      - type
+      - title
+      - status
+      - code
+      - requestId
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '[\s\S]*\S[\s\S]*'
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: '[\s\S]*\S[\s\S]*'
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[A-Z][A-Z0-9_]*$
+        requestId:
+          type: string
+          format: uuid
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldIssue'
+          maxItems: 30
+        currentVersion:
+          $ref: '#/components/schemas/Version'
+        currentProductTermsVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '[\s\S]*\S[\s\S]*'
+      description: RFC 9457 application/problem+json. code используется программно; message/title — для человека.
+        Неизвестные расширения ответа клиент игнорирует. Стек, финансовые данные и секреты сюда не включаются.
+    ApplicationStatus:
+      type: string
+      enum:
+      - DRAFT
+      - CHECKING
+      - NEEDS_INFO
+      - TECHNICAL_HOLD
+      - APPROVED
+      - DECLINED
+    AllowedAction:
+      type: string
+      enum:
+      - UPDATE_FORM
+      - SUBMIT
+      - RETRY
+    CsrfView:
+      type: object
+      additionalProperties: false
+      properties:
+        token:
+          type: string
+          minLength: 1
+          maxLength: 1024
+          pattern: '[\s\S]*\S[\s\S]*'
+        headerName:
+          type: string
+          const: X-CSRF-TOKEN
+      required:
+      - token
+      - headerName
+    UserView:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        displayName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '[\s\S]*\S[\s\S]*'
+      required:
+      - id
+      - displayName
+    CompanyView:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          minLength: 1
+          maxLength: 300
+          pattern: '[\s\S]*\S[\s\S]*'
+        legalForm:
+          type: string
+          enum:
+          - IP
+          - OOO
+        registrationDate:
+          type: string
+          format: date
+      required:
+      - id
+      - name
+      - legalForm
+      - registrationDate
+    CurrentUserView:
+      type: object
+      additionalProperties: false
+      properties:
+        user:
+          $ref: '#/components/schemas/UserView'
+        company:
+          $ref: '#/components/schemas/CompanyView'
+        demo:
+          type: boolean
+          const: true
+      required:
+      - user
+      - company
+      - demo
+    ProductTerms:
+      type: object
+      additionalProperties: false
+      properties:
+        version:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '[\s\S]*\S[\s\S]*'
+        currency:
+          type: string
+          const: RUB
+        minAmount:
+          $ref: '#/components/schemas/Money'
+        maxAmount:
+          $ref: '#/components/schemas/Money'
+        minTermMonths:
+          type: integer
+          minimum: 1
+          maximum: 600
+        maxTermMonths:
+          type: integer
+          minimum: 1
+          maximum: 600
+        annualRatePercent:
+          type: string
+          minLength: 4
+          maxLength: 6
+          pattern: ^(0|[1-9][0-9]{0,2})\.[0-9]{2}$
+        minBusinessAgeMonths:
+          type: integer
+          minimum: 0
+        disbursementDescription:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+        repaymentDescription:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+      required:
+      - version
+      - currency
+      - minAmount
+      - maxAmount
+      - minTermMonths
+      - maxTermMonths
+      - annualRatePercent
+      - minBusinessAgeMonths
+      - disbursementDescription
+      - repaymentDescription
+      description: Условия демонстрационного продукта. Числа в примерах иллюстративны и не являются утверждёнными
+        тарифами.
+    ProductView:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          $ref: '#/components/schemas/ProductCode'
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '[\s\S]*\S[\s\S]*'
+        description:
+          type: string
+          minLength: 1
+          maxLength: 3000
+          pattern: '[\s\S]*\S[\s\S]*'
+        terms:
+          $ref: '#/components/schemas/ProductTerms'
+      required:
+      - code
+      - name
+      - description
+      - terms
+    ProductList:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductView'
+          maxItems: 100
+      required:
+      - items
+    EquipmentForm:
+      type: object
+      additionalProperties: false
+      properties:
+        name:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 300
+            pattern: '[\s\S]*\S[\s\S]*'
+          - type: 'null'
+        purchasePrice:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+      required:
+      - name
+      - purchasePrice
+    ApplicationForm:
+      type: object
+      additionalProperties: false
+      properties:
+        amount:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        termMonths:
+          anyOf:
+          - type: integer
+            minimum: 1
+            maximum: 600
+          - type: 'null'
+        averageMonthlyInflow:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        averageMonthlyOutflow:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        equipment:
+          anyOf:
+          - $ref: '#/components/schemas/EquipmentForm'
+          - type: 'null'
+      required:
+      - amount
+      - termMonths
+      - averageMonthlyInflow
+      - averageMonthlyOutflow
+      - equipment
+      description: Полное содержимое формы. Все ключи присутствуют; null означает незаполненное/очищенное поле. Для
+        DRAFT допустима неполнота. Для WORKING_CAPITAL equipment=null; для EQUIPMENT при отправке обязательны name
+        и положительный purchasePrice. Остальные поля также обязательны при отправке; amount>0. Диапазоны продукта
+        проверяются на сервере.
+    CreateApplicationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        productCode:
+          $ref: '#/components/schemas/ProductCode'
+      required:
+      - productCode
+    SaveFormRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+        form:
+          $ref: '#/components/schemas/ApplicationForm'
+      required:
+      - expectedVersion
+      - form
+    SubmitRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+        expectedProductTermsVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '[\s\S]*\S[\s\S]*'
+      required:
+      - expectedVersion
+      - expectedProductTermsVersion
+    RetryRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        expectedVersion:
+          $ref: '#/components/schemas/Version'
+      required:
+      - expectedVersion
+    DecisionReason:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[A-Z][A-Z0-9_]*$
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+      required:
+      - code
+      - message
+    ApprovedTerms:
+      type: object
+      additionalProperties: false
+      properties:
+        amount:
+          $ref: '#/components/schemas/Money'
+        currency:
+          type: string
+          const: RUB
+        termMonths:
+          type: integer
+          minimum: 1
+          maximum: 600
+        annualRatePercent:
+          type: string
+          minLength: 4
+          maxLength: 6
+          pattern: ^(0|[1-9][0-9]{0,2})\.[0-9]{2}$
+        repaymentDescription:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+      required:
+      - amount
+      - currency
+      - termMonths
+      - annualRatePercent
+      - repaymentDescription
+    ApprovedDecision:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          const: APPROVED
+        decidedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/DecisionReason'
+          maxItems: 20
+        terms:
+          $ref: '#/components/schemas/ApprovedTerms'
+      required:
+      - type
+      - decidedAt
+      - reasons
+      - terms
+    DeclinedDecision:
+      type: object
+      additionalProperties: false
+      properties:
+        type:
+          type: string
+          const: DECLINED
+        decidedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        reasons:
+          type: array
+          items:
+            $ref: '#/components/schemas/DecisionReason'
+          minItems: 1
+          maxItems: 20
+      required:
+      - type
+      - decidedAt
+      - reasons
+    Decision:
+      oneOf:
+      - $ref: '#/components/schemas/ApprovedDecision'
+      - $ref: '#/components/schemas/DeclinedDecision'
+    ProcessingError:
+      type: object
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+          enum:
+          - SCORING_UNAVAILABLE
+          - SCORING_TIMEOUT
+          - SCORING_INVALID_RESPONSE
+          - PROCESSING_INTERRUPTED
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+        occurredAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      required:
+      - code
+      - message
+      - occurredAt
+    ProcessingAccepted:
+      type: object
+      additionalProperties: false
+      properties:
+        applicationId:
+          type: string
+          format: uuid
+        assessmentId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          const: CHECKING
+        version:
+          $ref: '#/components/schemas/Version'
+        acceptedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        statusUrl:
+          type: string
+          format: uri-reference
+        pollAfterSeconds:
+          type: integer
+          minimum: 1
+          maximum: 60
+      required:
+      - applicationId
+      - assessmentId
+      - status
+      - version
+      - acceptedAt
+      - statusUrl
+      - pollAfterSeconds
+    ApplicationSummary:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        productCode:
+          $ref: '#/components/schemas/ProductCode'
+        productName:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '[\s\S]*\S[\s\S]*'
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        amount:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        termMonths:
+          anyOf:
+          - type: integer
+            minimum: 1
+            maximum: 600
+          - type: 'null'
+        version:
+          $ref: '#/components/schemas/Version'
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      required:
+      - id
+      - productCode
+      - productName
+      - status
+      - amount
+      - termMonths
+      - version
+      - updatedAt
+    ApplicationPage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ApplicationSummary'
+          maxItems: 100
+        page:
+          type: integer
+          minimum: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 100
+        totalElements:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        totalPages:
+          type: integer
+          minimum: 0
+      required:
+      - items
+      - page
+      - size
+      - totalElements
+      - totalPages
+    ConversationView:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      required:
+      - id
+      - createdAt
+      - updatedAt
+    AssistantMessageContext:
+      type: object
+      additionalProperties: false
+      properties:
+        applicationId:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+        productCode:
+          anyOf:
+          - $ref: '#/components/schemas/ProductCode'
+          - type: 'null'
+        fieldCode:
+          anyOf:
+          - $ref: '#/components/schemas/FieldCode'
+          - type: 'null'
+      required:
+      - applicationId
+      - productCode
+      - fieldCode
+    SendMessageRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        text:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: '[\s\S]*\S[\s\S]*'
+        context:
+          $ref: '#/components/schemas/AssistantMessageContext'
+      required:
+      - text
+      - context
+    ChatMessage:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        sequence:
+          type: integer
+          minimum: 1
+          maximum: 9007199254740991
+        role:
+          type: string
+          enum:
+          - USER
+          - ASSISTANT
+        text:
+          type: string
+          minLength: 1
+          maxLength: 3000
+          pattern: '[\s\S]*\S[\s\S]*'
+        recommendedProductCode:
+          anyOf:
+          - $ref: '#/components/schemas/ProductCode'
+          - type: 'null'
+        replyToMessageId:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      required:
+      - id
+      - sequence
+      - role
+      - text
+      - recommendedProductCode
+      - replyToMessageId
+      - createdAt
+    MessageExchange:
+      type: object
+      additionalProperties: false
+      properties:
+        conversationId:
+          type: string
+          format: uuid
+        userMessage:
+          $ref: '#/components/schemas/ChatMessage'
+        assistantMessage:
+          $ref: '#/components/schemas/ChatMessage'
+      required:
+      - conversationId
+      - userMessage
+      - assistantMessage
+    MessagePage:
+      type: object
+      additionalProperties: false
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/ChatMessage'
+          maxItems: 100
+        lastSequence:
+          type: integer
+          minimum: 0
+          maximum: 9007199254740991
+        hasMore:
+          type: boolean
+      required:
+      - items
+      - lastSequence
+      - hasMore
+    ApplicationView:
+      type: object
+      additionalProperties: false
+      properties:
+        id:
+          type: string
+          format: uuid
+        version:
+          $ref: '#/components/schemas/Version'
+        status:
+          $ref: '#/components/schemas/ApplicationStatus'
+        product:
+          $ref: '#/components/schemas/ProductView'
+        reportingPeriod:
+          $ref: '#/components/schemas/ReportingPeriod'
+        form:
+          $ref: '#/components/schemas/ApplicationForm'
+        assessmentId:
+          anyOf:
+          - type: string
+            format: uuid
+          - type: 'null'
+        lastSubmittedAt:
+          anyOf:
+          - type: string
+            format: date-time
+            pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+          - type: 'null'
+        decision:
+          anyOf:
+          - $ref: '#/components/schemas/Decision'
+          - type: 'null'
+        requiredInformation:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldIssue'
+          maxItems: 30
+        processingError:
+          anyOf:
+          - $ref: '#/components/schemas/ProcessingError'
+          - type: 'null'
+        allowedActions:
+          type: array
+          items:
+            $ref: '#/components/schemas/AllowedAction'
+          uniqueItems: true
+          maxItems: 3
+        createdAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        updatedAt:
+          type: string
+          format: date-time
+          pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      required:
+      - id
+      - version
+      - status
+      - product
+      - reportingPeriod
+      - form
+      - assessmentId
+      - lastSubmittedAt
+      - decision
+      - requiredInformation
+      - processingError
+      - allowedActions
+      - createdAt
+      - updatedAt
+      allOf:
+      - if:
+          properties:
+            status:
+              const: DRAFT
+          required:
+          - status
+        then:
+          properties:
+            allowedActions:
+              const:
+              - UPDATE_FORM
+              - SUBMIT
+            decision:
+              type: 'null'
+            requiredInformation:
+              maxItems: 0
+            processingError:
+              type: 'null'
+            assessmentId:
+              type: 'null'
+            lastSubmittedAt:
+              type: 'null'
+      - if:
+          properties:
+            status:
+              const: CHECKING
+          required:
+          - status
+        then:
+          properties:
+            allowedActions:
+              const: []
+            decision:
+              type: 'null'
+            requiredInformation:
+              maxItems: 0
+            processingError:
+              type: 'null'
+            assessmentId:
+              type: string
+              format: uuid
+            lastSubmittedAt:
+              type: string
+              format: date-time
+              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            form:
+              properties:
+                amount:
+                  $ref: '#/components/schemas/PositiveMoney'
+                termMonths:
+                  type: integer
+                  minimum: 1
+                  maximum: 600
+                averageMonthlyInflow:
+                  $ref: '#/components/schemas/Money'
+                averageMonthlyOutflow:
+                  $ref: '#/components/schemas/Money'
+      - if:
+          properties:
+            status:
+              const: NEEDS_INFO
+          required:
+          - status
+        then:
+          properties:
+            allowedActions:
+              const:
+              - UPDATE_FORM
+              - SUBMIT
+            decision:
+              type: 'null'
+            requiredInformation:
+              minItems: 1
+            processingError:
+              type: 'null'
+            assessmentId:
+              type: string
+              format: uuid
+            lastSubmittedAt:
+              type: string
+              format: date-time
+              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+      - if:
+          properties:
+            status:
+              const: TECHNICAL_HOLD
+          required:
+          - status
+        then:
+          properties:
+            allowedActions:
+              const:
+              - RETRY
+            decision:
+              type: 'null'
+            requiredInformation:
+              maxItems: 0
+            processingError:
+              $ref: '#/components/schemas/ProcessingError'
+            assessmentId:
+              type: string
+              format: uuid
+            lastSubmittedAt:
+              type: string
+              format: date-time
+              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            form:
+              properties:
+                amount:
+                  $ref: '#/components/schemas/PositiveMoney'
+                termMonths:
+                  type: integer
+                  minimum: 1
+                  maximum: 600
+                averageMonthlyInflow:
+                  $ref: '#/components/schemas/Money'
+                averageMonthlyOutflow:
+                  $ref: '#/components/schemas/Money'
+      - if:
+          properties:
+            status:
+              const: APPROVED
+          required:
+          - status
+        then:
+          properties:
+            allowedActions:
+              const: []
+            decision:
+              $ref: '#/components/schemas/ApprovedDecision'
+            requiredInformation:
+              maxItems: 0
+            processingError:
+              type: 'null'
+            assessmentId:
+              type: string
+              format: uuid
+            lastSubmittedAt:
+              type: string
+              format: date-time
+              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            form:
+              properties:
+                amount:
+                  $ref: '#/components/schemas/PositiveMoney'
+                termMonths:
+                  type: integer
+                  minimum: 1
+                  maximum: 600
+                averageMonthlyInflow:
+                  $ref: '#/components/schemas/Money'
+                averageMonthlyOutflow:
+                  $ref: '#/components/schemas/Money'
+      - if:
+          properties:
+            status:
+              const: DECLINED
+          required:
+          - status
+        then:
+          properties:
+            allowedActions:
+              const: []
+            decision:
+              $ref: '#/components/schemas/DeclinedDecision'
+            requiredInformation:
+              maxItems: 0
+            processingError:
+              type: 'null'
+            assessmentId:
+              type: string
+              format: uuid
+            lastSubmittedAt:
+              type: string
+              format: date-time
+              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            form:
+              properties:
+                amount:
+                  $ref: '#/components/schemas/PositiveMoney'
+                termMonths:
+                  type: integer
+                  minimum: 1
+                  maximum: 600
+                averageMonthlyInflow:
+                  $ref: '#/components/schemas/Money'
+                averageMonthlyOutflow:
+                  $ref: '#/components/schemas/Money'
+      - if:
+          properties:
+            product:
+              properties:
+                code:
+                  const: WORKING_CAPITAL
+        then:
+          properties:
+            form:
+              properties:
+                equipment:
+                  type: 'null'
+      - if:
+          properties:
+            product:
+              properties:
+                code:
+                  const: EQUIPMENT
+            status:
+              enum:
+              - CHECKING
+              - TECHNICAL_HOLD
+              - APPROVED
+              - DECLINED
+        then:
+          properties:
+            form:
+              properties:
+                equipment:
+                  type: object
+                  additionalProperties: false
+                  properties:
+                    name:
+                      type: string
+                      minLength: 1
+                      maxLength: 300
+                      pattern: '[\s\S]*\S[\s\S]*'
+                    purchasePrice:
+                      $ref: '#/components/schemas/PositiveMoney'
+                  required:
+                  - name
+                  - purchasePrice
+      description: В DRAFT/NEEDS_INFO product содержит актуальные условия для следующей отправки; в остальных состояниях
+        — снимок условий последней попытки. version меняется и при переходах состояния. allowedActions — разрешённые
+        операции, не гарантия валидности формы или одобрения.
+  examples:
+    ApplicationDraft:
+      summary: DRAFT
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 1
+        status: DRAFT
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: null
+        lastSubmittedAt: null
+        decision: null
+        requiredInformation: []
+        processingError: null
+        allowedActions:
+        - UPDATE_FORM
+        - SUBMIT
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:01:00Z'
+    ApplicationChecking:
+      summary: CHECKING
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 2
+        status: CHECKING
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision: null
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:00Z'
+    ApplicationNeedsInfo:
+      summary: NEEDS_INFO
+      value:
+        id: fd1a6bcf-37a6-4559-9b94-1a502eb6cce8
+        version: 3
+        status: NEEDS_INFO
+        product:
+          code: EQUIPMENT
+          name: Кредит на оборудование
+          description: Приобретение оборудования для бизнеса.
+          terms:
+            version: demo-equipment-1
+            currency: RUB
+            minAmount: '200000.00'
+            maxAmount: '4000000.00'
+            minTermMonths: 6
+            maxTermMonths: 36
+            annualRatePercent: '18.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment:
+            name: Оборудование
+            purchasePrice: '600000.00'
+        assessmentId: 36f3f1b9-93bd-44ed-b806-564aa2c54ef7
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision: null
+        requiredInformation:
+        - field: form.equipment.name
+          code: PURCHASE_DESCRIPTION_REQUIRED
+          message: Уточните, какое оборудование планируется приобрести.
+        processingError: null
+        allowedActions:
+        - UPDATE_FORM
+        - SUBMIT
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+    ApplicationTechnicalHold:
+      summary: TECHNICAL_HOLD
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 3
+        status: TECHNICAL_HOLD
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision: null
+        requiredInformation: []
+        processingError:
+          code: SCORING_TIMEOUT
+          message: Проверка не завершена. Данные сохранены, можно повторить.
+          occurredAt: '2026-10-22T10:02:01Z'
+        allowedActions:
+        - RETRY
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+    ApplicationApproved:
+      summary: APPROVED
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 3
+        status: APPROVED
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision:
+          type: APPROVED
+          decidedAt: '2026-10-22T10:02:01Z'
+          reasons: []
+          terms:
+            amount: '500000.00'
+            currency: RUB
+            termMonths: 12
+            annualRatePercent: '20.00'
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+    ApplicationDeclined:
+      summary: DECLINED
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 3
+        status: DECLINED
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision:
+          type: DECLINED
+          decidedAt: '2026-10-22T10:02:01Z'
+          reasons:
+          - code: RISK_ABOVE_LIMIT
+            message: Оценка риска не соответствует условиям демонстрационной кредитной политики.
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+x-idempotency-retention-hours: 24

@@ -1,0 +1,270 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:credit-cabinet:assistant-input:1",
+  "title": "AssistantContext v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schemaVersion": {
+      "type": "string",
+      "const": "1"
+    },
+    "conversationId": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 2000,
+      "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+    },
+    "history": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/HistoryMessage"
+      },
+      "maxItems": 20
+    },
+    "context": {
+      "$ref": "#/$defs/Context"
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "conversationId",
+    "message",
+    "history",
+    "context"
+  ],
+  "$defs": {
+    "ProductCode": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 64,
+      "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+      "description": "Стабильный код из каталога. MVP: WORKING_CAPITAL и EQUIPMENT; список не зашит в enum."
+    },
+    "FieldCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-z][a-zA-Z0-9]*)*$",
+      "description": "Путь поля, например form.amount или form.equipment.name."
+    },
+    "HistoryMessage": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "role": {
+          "type": "string",
+          "enum": [
+            "USER",
+            "ASSISTANT"
+          ]
+        },
+        "text": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        }
+      },
+      "required": [
+        "role",
+        "text"
+      ]
+    },
+    "CatalogProduct": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/ProductCode"
+        },
+        "name": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        },
+        "purpose": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 3000,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        },
+        "termsVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        },
+        "conditions": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 1000,
+            "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+          },
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "code",
+        "name",
+        "purpose",
+        "termsVersion",
+        "conditions"
+      ]
+    },
+    "FieldDefinition": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/FieldCode"
+        },
+        "label": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        },
+        "description": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        }
+      },
+      "required": [
+        "code",
+        "label",
+        "description"
+      ]
+    },
+    "FieldValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "fieldCode": {
+          "$ref": "#/$defs/FieldCode"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string",
+              "minLength": 0,
+              "maxLength": 1000
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "fieldCode",
+        "value"
+      ]
+    },
+    "ApplicationContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "DRAFT",
+            "CHECKING",
+            "NEEDS_INFO",
+            "TECHNICAL_HOLD",
+            "APPROVED",
+            "DECLINED"
+          ]
+        },
+        "productCode": {
+          "$ref": "#/$defs/ProductCode"
+        },
+        "fieldValues": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldValue"
+          },
+          "maxItems": 20
+        }
+      },
+      "required": [
+        "applicationId",
+        "status",
+        "productCode",
+        "fieldValues"
+      ]
+    },
+    "Context": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "catalog": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/CatalogProduct"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "fieldDefinitions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldDefinition"
+          },
+          "minItems": 1,
+          "maxItems": 100
+        },
+        "selectedProductCode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ProductCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "currentFieldCode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/FieldCode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "application": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ApplicationContext"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "catalog",
+        "fieldDefinitions",
+        "selectedProductCode",
+        "currentFieldCode",
+        "application"
+      ]
+    }
+  }
+}
