@@ -1,13 +1,13 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "urn:credit-cabinet:assistant-input:1",
-  "title": "AssistantContext v1",
+  "$id": "urn:credit-cabinet:assistant-input:2",
+  "title": "AssistantContext v2",
   "type": "object",
   "additionalProperties": false,
   "properties": {
     "schemaVersion": {
       "type": "string",
-      "const": "1"
+      "const": "2"
     },
     "conversationId": {
       "type": "string",
@@ -43,14 +43,14 @@
       "minLength": 2,
       "maxLength": 64,
       "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
-      "description": "Стабильный код из каталога. MVP: WORKING_CAPITAL и EQUIPMENT; список не зашит в enum."
+      "description": "Стабильный код из каталога. MVP: WORKING_CAPITAL, OVERDRAFT, REVOLVING_LINE, LONG_TERM, GOVERNMENT_CONTRACT_LINE. Список не зашит в enum; новый код требует явной поддержки формы, политики и ML."
     },
     "FieldCode": {
       "type": "string",
       "minLength": 1,
       "maxLength": 120,
       "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-z][a-zA-Z0-9]*)*$",
-      "description": "Путь поля, например form.amount или form.equipment.name."
+      "description": "Путь поля, например form.averageMonthlyOutflow, form.financingPurpose или form.governmentContract.advanceAmount."
     },
     "HistoryMessage": {
       "type": "object",
@@ -109,6 +109,23 @@
             "pattern": "[\\s\\S]*\\S[\\s\\S]*"
           },
           "maxItems": 20
+        },
+        "financingType": {
+          "type": "string",
+          "enum": [
+            "TERM_LOAN",
+            "OVERDRAFT",
+            "REVOLVING_LINE",
+            "NON_REVOLVING_LINE"
+          ]
+        },
+        "financialPeriodMonths": {
+          "type": "integer",
+          "enum": [
+            3,
+            6,
+            12
+          ]
         }
       },
       "required": [
@@ -116,7 +133,9 @@
         "name",
         "purpose",
         "termsVersion",
-        "conditions"
+        "conditions",
+        "financingType",
+        "financialPeriodMonths"
       ]
     },
     "FieldDefinition": {
@@ -198,13 +217,46 @@
             "$ref": "#/$defs/FieldValue"
           },
           "maxItems": 20
+        },
+        "calculationDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "reportingPeriod": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "startDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "endDate": {
+              "type": "string",
+              "format": "date"
+            },
+            "months": {
+              "type": "integer",
+              "enum": [
+                3,
+                6,
+                12
+              ]
+            }
+          },
+          "required": [
+            "startDate",
+            "endDate",
+            "months"
+          ]
         }
       },
       "required": [
         "applicationId",
         "status",
         "productCode",
-        "fieldValues"
+        "fieldValues",
+        "calculationDate",
+        "reportingPeriod"
       ]
     },
     "Context": {

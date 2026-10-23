@@ -2,14 +2,12 @@ openapi: 3.1.1
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Credit Cabinet — Backend API
-  version: 0.3.0
-  description: 'Контракт фронтенда с Java. Все примеры синтетические; демонстрационные условия и правила
-    заданы в ../CREDIT_POLICY_AND_ML_REQUIREMENTS.md; численный порог ещё не выбран. Общие правила: README.md.
-    Сессия cookie, без JWT. Все изменяющие запросы защищены
-    CSRF. Требования полей при сохранении и отправке различаются. Версия 0.2.0 добавляет идентифицированные
-    вопросы requiredInformation и clarificationResponses в submit для подтверждения или исправления данных.
-    Версия 0.3.0 добавляет технические ошибки получения кредитного профиля. Java получает синтетическую историю
-    автоматически; форма, состояния и контракт LLM не расширяются данными кредитного отчёта.'
+  version: 0.4.0
+  description: 'Контракт Java для фронта: пять демонстрационных продуктов, форма с применимыми полями, финансовый период
+    3/6/12 месяцев и фиксированная calculationDate. Сессия cookie и CSRF. Кредитная история автоматически из локального
+    источника; текущая просрочка даёт отказ до ML. Продуктовые правила и допущения: ../CREDIT_POLICY_AND_ML_REQUIREMENTS.md.
+    Реальная выдача и обслуживание траншей не реализуются; решение означает одобренные демонстрационные условия, не перечисление
+    денег.'
 servers:
 - url: /api/v1
   description: Один origin через frontend proxy / общий reverse proxy.
@@ -60,8 +58,8 @@ paths:
       - SessionCookie: []
         CsrfToken: []
       description: 'Только demo-профиль. Разрешено анонимной сессии, созданной GET /csrf; нужны её cookie и CSRF-токен.
-        Без тела: аккаунт и компания выбираются сервером. При первом входе ID сессии меняется. Повтор действующей
-        сессии не меняет пользователя. После успеха вызвать GET /csrf. Вне demo-профиля — 404.'
+        Без тела: аккаунт и компания выбираются сервером. При первом входе ID сессии меняется. Повтор действующей сессии
+        не меняет пользователя. После успеха вызвать GET /csrf. Вне demo-профиля — 404.'
       responses:
         '200':
           description: Сессия создана или уже существует.
@@ -85,6 +83,9 @@ paths:
                   name: Демо-пекарня
                   legalForm: OOO
                   registrationDate: '2019-08-01'
+                  countryCode: RU
+                  hasSettlementAccount: true
+                  hasRegularInflowLast3Months: true
                 demo: true
         '403':
           $ref: '#/components/responses/Forbidden'
@@ -119,6 +120,9 @@ paths:
                   name: Демо-пекарня
                   legalForm: OOO
                   registrationDate: '2019-08-01'
+                  countryCode: RU
+                  hasSettlementAccount: true
+                  hasRegularInflowLast3Months: true
                 demo: true
         '401':
           $ref: '#/components/responses/Unauthorized'
@@ -146,32 +150,149 @@ paths:
                 items:
                 - code: WORKING_CAPITAL
                   name: Оборотный кредит
-                  description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+                  description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
                   terms:
-                    version: demo-working-capital-1
+                    version: demo-working-capital-2
                     currency: RUB
                     minAmount: '100000.00'
-                    maxAmount: '2000000.00'
+                    maxAmount: '3000000.00'
                     minTermMonths: 3
-                    maxTermMonths: 18
-                    annualRatePercent: '20.00'
-                    minBusinessAgeMonths: 12
-                    disbursementDescription: Получение одной суммой.
-                    repaymentDescription: Возврат по согласованному демонстрационному графику.
-                - code: EQUIPMENT
-                  name: Кредит на оборудование
-                  description: Приобретение оборудования для бизнеса.
+                    maxTermMonths: 12
+                    annualRatePercent: '24.00'
+                    minBusinessAgeMonths: 6
+                    financialPeriodMonths: 6
+                    financingType: TERM_LOAN
+                    repaymentType: ANNUITY
+                    requiresSettlementAccount: false
+                    requiresRegularInflow: false
+                    overdraftRules: null
+                    revolvingLineRules: null
+                    governmentContractRules: null
+                    disbursementDescription: Вся сумма одной выплатой.
+                    repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+                    generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных
+                      в России. Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная
+                      страховка отсутствует. Досрочное погашение без комиссии, проценты за фактическое время использования
+                      денег. Отсутствие текущей просрочки обязательно; соблюдение требований не гарантирует одобрение.
+                - code: OVERDRAFT
+                  name: Овердрафт
+                  description: Лимит к расчётному счёту для временного недостатка средств до ближайших поступлений.
                   terms:
-                    version: demo-equipment-1
+                    version: demo-overdraft-2
                     currency: RUB
-                    minAmount: '200000.00'
-                    maxAmount: '4000000.00'
-                    minTermMonths: 6
-                    maxTermMonths: 36
-                    annualRatePercent: '18.00'
+                    minAmount: '50000.00'
+                    maxAmount: '1000000.00'
+                    minTermMonths: 12
+                    maxTermMonths: 12
+                    annualRatePercent: '26.00'
+                    minBusinessAgeMonths: 6
+                    financialPeriodMonths: 3
+                    financingType: OVERDRAFT
+                    repaymentType: ACCOUNT_SWEEP
+                    requiresSettlementAccount: true
+                    requiresRegularInflow: true
+                    overdraftRules:
+                      maxInflowSharePercent: '30.00'
+                      maxDebtPeriodDays: 30
+                    revolvingLineRules: null
+                    governmentContractRules: null
+                    disbursementDescription: Использование лимита при недостатке собственных средств на расчётном счёте.
+                    repaymentDescription: Автоматически из поступлений; задолженность полностью погашается за 30 дней
+                      с первого использования, новые расходы срок не продлевают. Проценты ежемесячно. После полного погашения
+                      лимит снова доступен.
+                    generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных
+                      в России. Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная
+                      страховка отсутствует. Досрочное погашение без комиссии, проценты за фактическое время использования
+                      денег. Отсутствие текущей просрочки обязательно; соблюдение требований не гарантирует одобрение.
+                - code: REVOLVING_LINE
+                  name: Возобновляемая кредитная линия
+                  description: Общий лимит для регулярных закупок; деньги получают частями, погашенный основной долг
+                    восстанавливает доступный лимит.
+                  terms:
+                    version: demo-revolving-line-2
+                    currency: RUB
+                    minAmount: '300000.00'
+                    maxAmount: '5000000.00'
+                    minTermMonths: 24
+                    maxTermMonths: 24
+                    annualRatePercent: '23.00'
                     minBusinessAgeMonths: 12
-                    disbursementDescription: Получение одной суммой.
-                    repaymentDescription: Возврат по согласованному демонстрационному графику.
+                    financialPeriodMonths: 6
+                    financingType: REVOLVING_LINE
+                    repaymentType: EQUAL_PRINCIPAL_PER_TRANCHE
+                    requiresSettlementAccount: false
+                    requiresRegularInflow: false
+                    overdraftRules: null
+                    revolvingLineRules:
+                      minTrancheTermMonths: 3
+                      maxTrancheTermMonths: 6
+                    governmentContractRules: null
+                    disbursementDescription: Траншами в пределах возобновляемого лимита; неиспользованный лимит бесплатный.
+                    repaymentDescription: По каждому траншу ежемесячно равные доли основного долга плюс проценты на остаток.
+                      Срок транша 3–6 месяцев, возврат не позднее окончания линии.
+                    generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных
+                      в России. Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная
+                      страховка отсутствует. Досрочное погашение без комиссии, проценты за фактическое время использования
+                      денег. Отсутствие текущей просрочки обязательно; соблюдение требований не гарантирует одобрение.
+                - code: LONG_TERM
+                  name: Кредит на длительный срок
+                  description: Одна сумма на оборудование, ремонт помещения или расширение бизнеса.
+                  terms:
+                    version: demo-long-term-2
+                    currency: RUB
+                    minAmount: '500000.00'
+                    maxAmount: '5000000.00'
+                    minTermMonths: 24
+                    maxTermMonths: 60
+                    annualRatePercent: '22.00'
+                    minBusinessAgeMonths: 12
+                    financialPeriodMonths: 12
+                    financingType: TERM_LOAN
+                    repaymentType: ANNUITY
+                    requiresSettlementAccount: false
+                    requiresRegularInflow: false
+                    overdraftRules: null
+                    revolvingLineRules: null
+                    governmentContractRules: null
+                    disbursementDescription: Вся сумма одной выплатой на заявленную цель и бюджет покупки или проекта.
+                    repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+                    generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных
+                      в России. Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная
+                      страховка отсутствует. Досрочное погашение без комиссии, проценты за фактическое время использования
+                      денег. Отсутствие текущей просрочки обязательно; соблюдение требований не гарантирует одобрение.
+                - code: GOVERNMENT_CONTRACT_LINE
+                  name: Кредитная линия на госконтракт
+                  description: Невозобновляемая линия на исполнение уже заключённого контракта по 44-ФЗ; не для участия
+                    в закупке или обеспечения заявки.
+                  terms:
+                    version: demo-government-contract-line-2
+                    currency: RUB
+                    minAmount: '300000.00'
+                    maxAmount: '10000000.00'
+                    minTermMonths: 1
+                    maxTermMonths: 12
+                    annualRatePercent: '21.00'
+                    minBusinessAgeMonths: 12
+                    financialPeriodMonths: 12
+                    financingType: NON_REVOLVING_LINE
+                    repaymentType: CONTRACT_PROCEEDS
+                    requiresSettlementAccount: false
+                    requiresRegularInflow: false
+                    overdraftRules: null
+                    revolvingLineRules: null
+                    governmentContractRules:
+                      maxNetContractSharePercent: '70.00'
+                      maxDaysAfterFinalPayment: 30
+                      renewable: false
+                    disbursementDescription: Траншами до завершения исполнения контракта. Погашение не восстанавливает
+                      выбранный лимит.
+                    repaymentDescription: Проценты ежемесячно; поступления по контракту направляются на долг. Остаток
+                      возвращается к плановой дате даже при задержке оплаты заказчиком; не позднее 30 дней после окончательной
+                      оплаты по контракту.
+                    generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных
+                      в России. Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная
+                      страховка отсутствует. Досрочное погашение без комиссии, проценты за фактическое время использования
+                      денег. Отсутствие текущей просрочки обязательно; соблюдение требований не гарантирует одобрение.
         '401':
           $ref: '#/components/responses/Unauthorized'
         '500':
@@ -196,8 +317,8 @@ paths:
             example:
               productCode: WORKING_CAPITAL
       description: Связывает черновик с текущей компанией и представителем. Пользователь, компания, ставка и состояние
-        не принимаются от фронта. Неизвестный/недоступный продукт — 422. Повтор создания с тем же ключом возвращает
-        исходный результат команды; актуальная заявка читается GET-операцией.
+        не принимаются от фронта. Неизвестный/недоступный продукт — 422. Повтор создания с тем же ключом возвращает исходный
+        результат команды; актуальная заявка читается GET-операцией.
       responses:
         '201':
           description: Создан новый DRAFT.
@@ -219,28 +340,43 @@ paths:
                 product:
                   code: WORKING_CAPITAL
                   name: Оборотный кредит
-                  description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+                  description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
                   terms:
-                    version: demo-working-capital-1
+                    version: demo-working-capital-2
                     currency: RUB
                     minAmount: '100000.00'
-                    maxAmount: '2000000.00'
+                    maxAmount: '3000000.00'
                     minTermMonths: 3
-                    maxTermMonths: 18
-                    annualRatePercent: '20.00'
-                    minBusinessAgeMonths: 12
-                    disbursementDescription: Получение одной суммой.
-                    repaymentDescription: Возврат по согласованному демонстрационному графику.
+                    maxTermMonths: 12
+                    annualRatePercent: '24.00'
+                    minBusinessAgeMonths: 6
+                    financialPeriodMonths: 6
+                    financingType: TERM_LOAN
+                    repaymentType: ANNUITY
+                    requiresSettlementAccount: false
+                    requiresRegularInflow: false
+                    overdraftRules: null
+                    revolvingLineRules: null
+                    governmentContractRules: null
+                    disbursementDescription: Вся сумма одной выплатой.
+                    repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+                    generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных
+                      в России. Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная
+                      страховка отсутствует. Досрочное погашение без комиссии, проценты за фактическое время использования
+                      денег. Отсутствие текущей просрочки обязательно; соблюдение требований не гарантирует одобрение.
                 reportingPeriod:
-                  startDate: '2025-10-01'
+                  startDate: '2026-04-01'
                   endDate: '2026-09-30'
-                  months: 12
+                  months: 6
                 form:
                   amount: null
                   termMonths: null
                   averageMonthlyInflow: null
                   averageMonthlyOutflow: null
-                  equipment: null
+                  financingPurpose: null
+                  projectBudget: null
+                  trancheTermMonths: null
+                  governmentContract: null
                 assessmentId: null
                 lastSubmittedAt: null
                 decision: null
@@ -251,6 +387,7 @@ paths:
                 - SUBMIT
                 createdAt: '2026-10-22T10:00:00Z'
                 updatedAt: '2026-10-22T10:00:00Z'
+                calculationDate: '2026-10-22'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -330,9 +467,8 @@ paths:
       summary: Прочитать заявку, состояние и решение
       parameters:
       - $ref: '#/components/parameters/ApplicationId'
-      description: Используется для восстановления формы и опроса состояния. В CHECKING опрашивать примерно раз в
-        2 секунды; остановиться при выходе из CHECKING или уходе со страницы. Отсутствующая и чужая заявка дают одинаковый
-        404.
+      description: Используется для восстановления формы и опроса состояния. В CHECKING опрашивать примерно раз в 2 секунды;
+        остановиться при выходе из CHECKING или уходе со страницы. Отсутствующая и чужая заявка дают одинаковый 404.
       responses:
         '200':
           description: Актуальная заявка. DECLINED и TECHNICAL_HOLD также возвращаются с HTTP 200.
@@ -364,6 +500,24 @@ paths:
                   $ref: '#/components/examples/ApplicationApproved'
                 declined:
                   $ref: '#/components/examples/ApplicationDeclined'
+                overdraft:
+                  $ref: '#/components/examples/ApplicationOverdraft'
+                revolving_line:
+                  $ref: '#/components/examples/ApplicationRevolvingLine'
+                long_term:
+                  $ref: '#/components/examples/ApplicationLongTerm'
+                government_contract_line:
+                  $ref: '#/components/examples/ApplicationGovernmentContractLine'
+                current_overdue_debt:
+                  $ref: '#/components/examples/ApplicationCurrentOverdueDebt'
+                approved_overdraft:
+                  $ref: '#/components/examples/ApplicationApprovedOverdraft'
+                approved_revolving_line:
+                  $ref: '#/components/examples/ApplicationApprovedRevolvingLine'
+                approved_long_term:
+                  $ref: '#/components/examples/ApplicationApprovedLongTerm'
+                approved_government_contract_line:
+                  $ref: '#/components/examples/ApplicationApprovedGovernmentContractLine'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -389,21 +543,80 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SaveFormRequest'
-            example:
-              expectedVersion: 0
-              form:
-                amount: '500000.00'
-                termMonths: 12
-                averageMonthlyInflow: '1200000.00'
-                averageMonthlyOutflow: '800000.00'
-                equipment: null
+            examples:
+              overdraft:
+                value:
+                  expectedVersion: 0
+                  form:
+                    amount: '500000.00'
+                    termMonths: 12
+                    averageMonthlyInflow: '2000000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    financingPurpose: null
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract: null
+              revolving_line:
+                value:
+                  expectedVersion: 0
+                  form:
+                    amount: '500000.00'
+                    termMonths: 24
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    financingPurpose: null
+                    projectBudget: null
+                    trancheTermMonths: 3
+                    governmentContract: null
+              long_term:
+                value:
+                  expectedVersion: 0
+                  form:
+                    amount: '500000.00'
+                    termMonths: 24
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    financingPurpose: Покупка печи для пекарни
+                    projectBudget: '600000.00'
+                    trancheTermMonths: null
+                    governmentContract: null
+              government_contract_line:
+                value:
+                  expectedVersion: 0
+                  form:
+                    amount: '500000.00'
+                    termMonths: 6
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    financingPurpose: null
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract:
+                      lawCode: 44_FZ
+                      number: DEMO-44-001
+                      contractAmount: '2000000.00'
+                      advanceAmount: '200000.00'
+                      executionEndDate: '2027-04-15'
+                      finalPaymentDate: '2027-04-30'
+              working_capital:
+                value:
+                  expectedVersion: 0
+                  form:
+                    amount: '500000.00'
+                    termMonths: 12
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    financingPurpose: null
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract: null
       description: Только DRAFT и NEEDS_INFO. Все ключи form обязательны; null очищает поле. В NEEDS_INFO изменяются
-        только запрошенные поля; остальные передаются без изменений. Сохранение не разрешает вопрос и не запускает
-        рассмотрение. Для продолжения нужен submit с clarificationResponses. Исходный вопрос и его clarificationId
-        остаются доступны после исправления поля. Продукт неизменяем. При конфликте версии — 409
-        VERSION_CONFLICT, при запрещённом состоянии — 409 INVALID_APPLICATION_STATE. Некорректное сохранение не применяется
-        частично. Автосохранение фронт выполняет последовательно; перед submit дожидается последнего успешного сохранения.
-        Потерянный ответ PUT проверяется чтением заявки, не слепым повтором с новым содержимым.
+        только запрошенные поля; остальные передаются без изменений. Сохранение не разрешает вопрос и не запускает рассмотрение.
+        Для продолжения нужен submit с clarificationResponses. Исходный вопрос и его clarificationId остаются доступны
+        после исправления поля. Продукт неизменяем. При конфликте версии — 409 VERSION_CONFLICT, при запрещённом состоянии
+        — 409 INVALID_APPLICATION_STATE. Некорректное сохранение не применяется частично. Автосохранение фронт выполняет
+        последовательно; перед submit дожидается последнего успешного сохранения. Потерянный ответ PUT проверяется чтением
+        заявки, не слепым повтором с новым содержимым.
       responses:
         '200':
           description: Сохранённая заявка с актуальной версией.
@@ -423,28 +636,43 @@ paths:
                 product:
                   code: WORKING_CAPITAL
                   name: Оборотный кредит
-                  description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+                  description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
                   terms:
-                    version: demo-working-capital-1
+                    version: demo-working-capital-2
                     currency: RUB
                     minAmount: '100000.00'
-                    maxAmount: '2000000.00'
+                    maxAmount: '3000000.00'
                     minTermMonths: 3
-                    maxTermMonths: 18
-                    annualRatePercent: '20.00'
-                    minBusinessAgeMonths: 12
-                    disbursementDescription: Получение одной суммой.
-                    repaymentDescription: Возврат по согласованному демонстрационному графику.
+                    maxTermMonths: 12
+                    annualRatePercent: '24.00'
+                    minBusinessAgeMonths: 6
+                    financialPeriodMonths: 6
+                    financingType: TERM_LOAN
+                    repaymentType: ANNUITY
+                    requiresSettlementAccount: false
+                    requiresRegularInflow: false
+                    overdraftRules: null
+                    revolvingLineRules: null
+                    governmentContractRules: null
+                    disbursementDescription: Вся сумма одной выплатой.
+                    repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+                    generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных
+                      в России. Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная
+                      страховка отсутствует. Досрочное погашение без комиссии, проценты за фактическое время использования
+                      денег. Отсутствие текущей просрочки обязательно; соблюдение требований не гарантирует одобрение.
                 reportingPeriod:
-                  startDate: '2025-10-01'
+                  startDate: '2026-04-01'
                   endDate: '2026-09-30'
-                  months: 12
+                  months: 6
                 form:
                   amount: '500000.00'
                   termMonths: 12
                   averageMonthlyInflow: '1200000.00'
                   averageMonthlyOutflow: '800000.00'
-                  equipment: null
+                  financingPurpose: null
+                  projectBudget: null
+                  trancheTermMonths: null
+                  governmentContract: null
                 assessmentId: null
                 lastSubmittedAt: null
                 decision: null
@@ -455,6 +683,7 @@ paths:
                 - SUBMIT
                 createdAt: '2026-10-22T10:00:00Z'
                 updatedAt: '2026-10-22T10:01:00Z'
+                calculationDate: '2026-10-22'
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -492,13 +721,13 @@ paths:
                 summary: Первая отправка сохранённой формы
                 value:
                   expectedVersion: 1
-                  expectedProductTermsVersion: demo-working-capital-1
+                  expectedProductTermsVersion: demo-working-capital-2
                   clarificationResponses: []
               confirmZeroInflow:
                 summary: NEEDS_INFO — подтверждение неизменного нуля без редактирования формы
                 value:
                   expectedVersion: 3
-                  expectedProductTermsVersion: demo-equipment-1
+                  expectedProductTermsVersion: demo-long-term-2
                   clarificationResponses:
                   - clarificationId: 1f9bd36f-e62b-47cd-a8c3-fc3227fc6893
                     response: CONFIRM_VALUE
@@ -507,24 +736,22 @@ paths:
                 summary: NEEDS_INFO — после сохранения положительных поступлений версия стала 4
                 value:
                   expectedVersion: 4
-                  expectedProductTermsVersion: demo-equipment-1
+                  expectedProductTermsVersion: demo-long-term-2
                   clarificationResponses:
                   - clarificationId: 1f9bd36f-e62b-47cd-a8c3-fc3227fc6893
                     response: VALUE_CORRECTED
-      description: DRAFT или NEEDS_INFO. Проверяет полноту сохранённой формы; form в теле не принимает. В DRAFT
-        clarificationResponses отсутствует или пуст. В NEEDS_INFO обязательны ответы ровно на все текущие вопросы,
-        без повторяющихся clarificationId. Для ZERO_INFLOW_CONFIRMATION ответ CONFIRM_VALUE допустим только при
-        сохранённом 0.00; VALUE_CORRECTED — после сохранения положительного значения. Комментарий необязателен и
-        не заменяет ответ. Отсутствующий ответ — 422 CLARIFICATION_RESPONSE_REQUIRED; противоречие с формой — 422
-        CLARIFICATION_RESPONSE_CONFLICT; ответы в DRAFT — 422 CLARIFICATION_NOT_EXPECTED; устаревший или посторонний
-        идентификатор — 409 CLARIFICATION_STALE. Проверки выполняются после доступа и поиска успешного повтора ключа.
-        Ответы, их связь с вопросами, снимок, новый assessmentId, CHECKING и задание сохраняются одной транзакцией.
-        Подтверждение привязано к полю, исходному значению и периоду; при неизменных данных повторный вопрос не создаётся,
-        в том числе при техническом retry. Изменение значения делает прежнее подтверждение неприменимым.
-        Изменившиеся условия — 409 PRODUCT_TERMS_CHANGED
-        с currentProductTermsVersion; фронт показывает их до новой отправки. Повтор ключа возвращает тот же assessmentId
-        и исходное 202-подтверждение, даже если рассмотрение завершено. Для актуального состояния читать GET. Другой
-        ключ при активной проверке — 409 APPLICATION_ALREADY_SUBMITTED.
+      description: DRAFT или NEEDS_INFO. Проверяет полноту сохранённой формы; form в теле не принимает. В DRAFT clarificationResponses
+        отсутствует или пуст. В NEEDS_INFO обязательны ответы ровно на все текущие вопросы, без повторяющихся clarificationId.
+        Для ZERO_INFLOW_CONFIRMATION ответ CONFIRM_VALUE допустим только при сохранённом 0.00; VALUE_CORRECTED — после
+        сохранения положительного значения. Комментарий необязателен и не заменяет ответ. Отсутствующий ответ — 422 CLARIFICATION_RESPONSE_REQUIRED;
+        противоречие с формой — 422 CLARIFICATION_RESPONSE_CONFLICT; ответы в DRAFT — 422 CLARIFICATION_NOT_EXPECTED;
+        устаревший или посторонний идентификатор — 409 CLARIFICATION_STALE. Проверки выполняются после доступа и поиска
+        успешного повтора ключа. Ответы, их связь с вопросами, снимок, новый assessmentId, CHECKING и задание сохраняются
+        одной транзакцией. Подтверждение привязано к полю, исходному значению и периоду; при неизменных данных повторный
+        вопрос не создаётся, в том числе при техническом retry. Изменение значения делает прежнее подтверждение неприменимым.
+        Изменившиеся условия — 409 PRODUCT_TERMS_CHANGED с currentProductTermsVersion; фронт показывает их до новой отправки.
+        Повтор ключа возвращает тот же assessmentId и исходное 202-подтверждение, даже если рассмотрение завершено. Для
+        актуального состояния читать GET. Другой ключ при активной проверке — 409 APPLICATION_ALREADY_SUBMITTED.
       responses:
         '202':
           description: Данные и задание сохранены, рассмотрение принято.
@@ -702,8 +929,8 @@ paths:
           minimum: 1
           maximum: 100
           default: 50
-      description: Возвращает sequence > afterSequence. Если items пуст, lastSequence равен afterSequence. hasMore
-        показывает наличие следующей страницы. Чужой диалог — 404.
+      description: Возвращает sequence > afterSequence. Если items пуст, lastSequence равен afterSequence. hasMore показывает
+        наличие следующей страницы. Чужой диалог — 404.
       responses:
         '200':
           description: Сообщения по возрастанию sequence.
@@ -768,12 +995,12 @@ paths:
                 productCode: null
                 fieldCode: null
       description: Обычный JSON-ответ без streaming, бюджет генерации 60 секунд. Java сама получает историю, каталог,
-        определения полей и доступную заявку. Несовместимые productCode/applicationId или неизвестное поле — 422;
-        чужая заявка — 404 до вызова LLM. Один активный вызов на диалог; занятый диалог/незавершённая команда — 409
-        CONVERSATION_BUSY или OPERATION_IN_PROGRESS. Пара USER+ASSISTANT сохраняется атомарно после валидного ответа;
-        при сбое полупара не добавляется, фронт сохраняет введённый текст. Успешный повтор ключа не вызывает LLM и
-        не добавляет сообщения. После ошибки генерации тот же ключ можно повторить; до успеха контекст собирается
-        заново. Возврат после сбоя не даёт повода повторять создание заявки или менять её данные.
+        определения полей и доступную заявку. Несовместимые productCode/applicationId или неизвестное поле — 422; чужая
+        заявка — 404 до вызова LLM. Один активный вызов на диалог; занятый диалог/незавершённая команда — 409 CONVERSATION_BUSY
+        или OPERATION_IN_PROGRESS. Пара USER+ASSISTANT сохраняется атомарно после валидного ответа; при сбое полупара
+        не добавляется, фронт сохраняет введённый текст. Успешный повтор ключа не вызывает LLM и не добавляет сообщения.
+        После ошибки генерации тот же ключ можно повторить; до успеха контекст собирается заново. Возврат после сбоя
+        не даёт повода повторять создание заявки или менять её данные.
       responses:
         '200':
           description: Вопрос и ответ сохранены.
@@ -859,8 +1086,8 @@ components:
       schema:
         type: string
         format: uuid
-      description: 'UUID одного действия. Область: пользователь + компания + операция + ресурс. Тот же ключ и тело
-        повторяют результат команды; другое тело — 409 IDEMPOTENCY_KEY_REUSED. Повтор распознаётся до проверки expectedVersion.
+      description: 'UUID одного действия. Область: пользователь + компания + операция + ресурс. Тот же ключ и тело повторяют
+        результат команды; другое тело — 409 IDEMPOTENCY_KEY_REUSED. Повтор распознаётся до проверки expectedVersion.
         Успешные результаты хранятся минимум 24 часа в PostgreSQL, независимо от сессии.'
   headers:
     RequestId:
@@ -1065,8 +1292,8 @@ components:
       minLength: 4
       maxLength: 15
       pattern: ^(0|[1-9][0-9]{0,11})\.[0-9]{2}$
-      description: Неотрицательная сумма в рублях, ровно две цифры после точки. Java BigDecimal / Python Decimal.
-        Это технический диапазон, не лимит продукта.
+      description: Неотрицательная сумма в рублях, ровно две цифры после точки. Java BigDecimal / Python Decimal. Это
+        технический диапазон, не лимит продукта.
     PositiveMoney:
       type: string
       minLength: 4
@@ -1080,13 +1307,14 @@ components:
       minLength: 2
       maxLength: 64
       pattern: ^[A-Z][A-Z0-9_]{1,63}$
-      description: 'Стабильный код из каталога. MVP: WORKING_CAPITAL и EQUIPMENT; список не зашит в enum.'
+      description: 'Стабильный код из каталога. MVP: WORKING_CAPITAL, OVERDRAFT, REVOLVING_LINE, LONG_TERM, GOVERNMENT_CONTRACT_LINE.
+        Список не зашит в enum; новый код требует явной поддержки формы, политики и ML.'
     FieldCode:
       type: string
       minLength: 1
       maxLength: 120
       pattern: ^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)*$
-      description: Путь поля, например form.amount или form.equipment.name.
+      description: Путь поля, например form.amount или form.financingPurpose.
     Version:
       type: integer
       minimum: 0
@@ -1105,13 +1333,17 @@ components:
           format: date
         months:
           type: integer
-          const: 12
+          enum:
+          - 3
+          - 6
+          - 12
       required:
       - startDate
       - endDate
       - months
-      description: 12 полных календарных месяцев до месяца создания черновика; границы включительно. Фиксируется сервером
-        и не сдвигается при повторной отправке.
+      description: 'Полные календарные месяцы до месяца calculationDate черновика; границы включительно. Число месяцев
+        определяет продукт: OVERDRAFT=3, WORKING_CAPITAL/REVOLVING_LINE=6, LONG_TERM/GOVERNMENT_CONTRACT_LINE=12. Период
+        фиксируется сервером и не сдвигается при submit/retry.'
     FieldIssue:
       type: object
       additionalProperties: false
@@ -1182,8 +1414,8 @@ components:
           minLength: 1
           maxLength: 64
           pattern: '[\s\S]*\S[\s\S]*'
-      description: RFC 9457 application/problem+json. code используется программно; message/title — для человека.
-        Неизвестные расширения ответа клиент игнорирует. Стек, финансовые данные и секреты сюда не включаются.
+      description: RFC 9457 application/problem+json. code используется программно; message/title — для человека. Неизвестные
+        расширения ответа клиент игнорирует. Стек, финансовые данные и секреты сюда не включаются.
     ApplicationStatus:
       type: string
       enum:
@@ -1249,11 +1481,21 @@ components:
         registrationDate:
           type: string
           format: date
+        countryCode:
+          type: string
+          const: RU
+        hasSettlementAccount:
+          type: boolean
+        hasRegularInflowLast3Months:
+          type: boolean
       required:
       - id
       - name
       - legalForm
       - registrationDate
+      - countryCode
+      - hasSettlementAccount
+      - hasRegularInflowLast3Months
     CurrentUserView:
       type: object
       additionalProperties: false
@@ -1282,9 +1524,9 @@ components:
           type: string
           const: RUB
         minAmount:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/PositiveMoney'
         maxAmount:
-          $ref: '#/components/schemas/Money'
+          $ref: '#/components/schemas/PositiveMoney'
         minTermMonths:
           type: integer
           minimum: 1
@@ -1301,6 +1543,42 @@ components:
         minBusinessAgeMonths:
           type: integer
           minimum: 0
+        financialPeriodMonths:
+          type: integer
+          enum:
+          - 3
+          - 6
+          - 12
+        financingType:
+          type: string
+          enum:
+          - TERM_LOAN
+          - OVERDRAFT
+          - REVOLVING_LINE
+          - NON_REVOLVING_LINE
+        repaymentType:
+          type: string
+          enum:
+          - ANNUITY
+          - ACCOUNT_SWEEP
+          - EQUAL_PRINCIPAL_PER_TRANCHE
+          - CONTRACT_PROCEEDS
+        requiresSettlementAccount:
+          type: boolean
+        requiresRegularInflow:
+          type: boolean
+        overdraftRules:
+          anyOf:
+          - $ref: '#/components/schemas/OverdraftRules'
+          - type: 'null'
+        revolvingLineRules:
+          anyOf:
+          - $ref: '#/components/schemas/RevolvingLineRules'
+          - type: 'null'
+        governmentContractRules:
+          anyOf:
+          - $ref: '#/components/schemas/GovernmentContractRules'
+          - type: 'null'
         disbursementDescription:
           type: string
           minLength: 1
@@ -1311,6 +1589,11 @@ components:
           minLength: 1
           maxLength: 1000
           pattern: '[\s\S]*\S[\s\S]*'
+        generalConditions:
+          type: string
+          minLength: 1
+          maxLength: 3000
+          pattern: '[\s\S]*\S[\s\S]*'
       required:
       - version
       - currency
@@ -1320,10 +1603,105 @@ components:
       - maxTermMonths
       - annualRatePercent
       - minBusinessAgeMonths
+      - financialPeriodMonths
+      - financingType
+      - repaymentType
+      - requiresSettlementAccount
+      - requiresRegularInflow
+      - overdraftRules
+      - revolvingLineRules
+      - governmentContractRules
       - disbursementDescription
       - repaymentDescription
-      description: Условия демонстрационного продукта. Числа в примерах иллюстративны и не являются утверждёнными
-        тарифами.
+      - generalConditions
+      description: Условия демопродукта. amount означает сумму для TERM_LOAN и лимит для линий/овердрафта; termMonths
+        — срок кредита либо действия линии/лимита, не срок транша. Все ставки — на фактический остаток долга. Числа каталога
+        берутся из кредитной политики.
+      allOf:
+      - if:
+          properties:
+            financingType:
+              const: TERM_LOAN
+          required:
+          - financingType
+        then:
+          properties:
+            overdraftRules:
+              type: 'null'
+            revolvingLineRules:
+              type: 'null'
+            governmentContractRules:
+              type: 'null'
+            requiresSettlementAccount:
+              const: false
+            requiresRegularInflow:
+              const: false
+      - if:
+          properties:
+            financingType:
+              const: OVERDRAFT
+          required:
+          - financingType
+        then:
+          properties:
+            overdraftRules:
+              $ref: '#/components/schemas/OverdraftRules'
+            revolvingLineRules:
+              type: 'null'
+            governmentContractRules:
+              type: 'null'
+            requiresSettlementAccount:
+              const: true
+            requiresRegularInflow:
+              const: true
+            minTermMonths:
+              const: 12
+            maxTermMonths:
+              const: 12
+            financialPeriodMonths:
+              const: 3
+      - if:
+          properties:
+            financingType:
+              const: REVOLVING_LINE
+          required:
+          - financingType
+        then:
+          properties:
+            overdraftRules:
+              type: 'null'
+            revolvingLineRules:
+              $ref: '#/components/schemas/RevolvingLineRules'
+            governmentContractRules:
+              type: 'null'
+            requiresSettlementAccount:
+              const: false
+            requiresRegularInflow:
+              const: false
+            minTermMonths:
+              const: 24
+            maxTermMonths:
+              const: 24
+            financialPeriodMonths:
+              const: 6
+      - if:
+          properties:
+            financingType:
+              const: NON_REVOLVING_LINE
+          required:
+          - financingType
+        then:
+          properties:
+            overdraftRules:
+              type: 'null'
+            revolvingLineRules:
+              type: 'null'
+            governmentContractRules:
+              $ref: '#/components/schemas/GovernmentContractRules'
+            requiresSettlementAccount:
+              const: false
+            requiresRegularInflow:
+              const: false
     ProductView:
       type: object
       additionalProperties: false
@@ -1358,24 +1736,6 @@ components:
           maxItems: 100
       required:
       - items
-    EquipmentForm:
-      type: object
-      additionalProperties: false
-      properties:
-        name:
-          anyOf:
-          - type: string
-            minLength: 1
-            maxLength: 300
-            pattern: '[\s\S]*\S[\s\S]*'
-          - type: 'null'
-        purchasePrice:
-          anyOf:
-          - $ref: '#/components/schemas/Money'
-          - type: 'null'
-      required:
-      - name
-      - purchasePrice
     ApplicationForm:
       type: object
       additionalProperties: false
@@ -1398,20 +1758,39 @@ components:
           anyOf:
           - $ref: '#/components/schemas/Money'
           - type: 'null'
-        equipment:
+        financingPurpose:
           anyOf:
-          - $ref: '#/components/schemas/EquipmentForm'
+          - type: string
+            minLength: 1
+            maxLength: 1000
+            pattern: '[\s\S]*\S[\s\S]*'
+          - type: 'null'
+        projectBudget:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        trancheTermMonths:
+          anyOf:
+          - type: integer
+            minimum: 1
+            maximum: 600
+          - type: 'null'
+        governmentContract:
+          anyOf:
+          - $ref: '#/components/schemas/GovernmentContractForm'
           - type: 'null'
       required:
       - amount
       - termMonths
       - averageMonthlyInflow
       - averageMonthlyOutflow
-      - equipment
-      description: Полное содержимое формы. Все ключи присутствуют; null означает незаполненное/очищенное поле. Для
-        DRAFT допустима неполнота. Для WORKING_CAPITAL equipment=null; для EQUIPMENT при отправке обязательны name
-        и положительный purchasePrice. Остальные поля также обязательны при отправке; amount>0. Диапазоны продукта
-        проверяются на сервере.
+      - financingPurpose
+      - projectBudget
+      - trancheTermMonths
+      - governmentContract
+      description: 'Полная замена формы: все ключи присутствуют, null очищает поле. LONG_TERM использует financingPurpose/projectBudget,
+        REVOLVING_LINE — trancheTermMonths, GOVERNMENT_CONTRACT_LINE — governmentContract; неприменимые поля null. amount
+        — сумма либо лимит; termMonths — срок кредита/линии. Расчётная дата и финансовый период определяются сервером.'
     CreateApplicationRequest:
       type: object
       additionalProperties: false
@@ -1449,8 +1828,8 @@ components:
           maxItems: 30
           uniqueItems: true
           default: []
-          description: В DRAFT отсутствует или пуст. В NEEDS_INFO ответы на все текущие вопросы; уникальность
-            clarificationId, принадлежность вопроса и соответствие ответа форме дополнительно проверяет Java.
+          description: В DRAFT отсутствует или пуст. В NEEDS_INFO ответы на все текущие вопросы; уникальность clarificationId,
+            принадлежность вопроса и соответствие ответа форме дополнительно проверяет Java.
       required:
       - expectedVersion
       - expectedProductTermsVersion
@@ -1481,10 +1860,10 @@ components:
       - code
       - message
       - observedValue
-      description: В MVP вопрос о нулевых поступлениях, сформированный Java до вызова ML. Идентификатор связан
-        с заявкой, исходной попыткой, полем, значением и reportingPeriod заявки. Сохраняется до принятия ответа,
-        включая редактирование запрошенного поля. observedValue не меняется вслед за form. Код нового типа
-        уточнения требует расширения схемы и согласования поведения клиентов.
+      description: В MVP вопрос о нулевых поступлениях, сформированный Java до вызова ML. Идентификатор связан с заявкой,
+        исходной попыткой, полем, значением и reportingPeriod заявки. Сохраняется до принятия ответа, включая редактирование
+        запрошенного поля. observedValue не меняется вслед за form. Код нового типа уточнения требует расширения схемы
+        и согласования поведения клиентов.
     ClarificationResponse:
       type: object
       additionalProperties: false
@@ -1507,9 +1886,9 @@ components:
       required:
       - clarificationId
       - response
-      description: CONFIRM_VALUE подтверждает исходный ноль без изменения сохранённого поля; VALUE_CORRECTED
-        сообщает, что поле уже сохранено с положительным значением. Комментарий необязателен, допускается null;
-        не заменяет ответ, не меняет анкету и не передаётся в признаки ML.
+      description: CONFIRM_VALUE подтверждает исходный ноль без изменения сохранённого поля; VALUE_CORRECTED сообщает,
+        что поле уже сохранено с положительным значением. Комментарий необязателен, допускается null; не заменяет ответ,
+        не меняет анкету и не передаётся в признаки ML.
     RetryRequest:
       type: object
       additionalProperties: false
@@ -1558,12 +1937,99 @@ components:
           minLength: 1
           maxLength: 1000
           pattern: '[\s\S]*\S[\s\S]*'
+        financingType:
+          type: string
+          enum:
+          - TERM_LOAN
+          - OVERDRAFT
+          - REVOLVING_LINE
+          - NON_REVOLVING_LINE
+        repaymentType:
+          type: string
+          enum:
+          - ANNUITY
+          - ACCOUNT_SWEEP
+          - EQUAL_PRINCIPAL_PER_TRANCHE
+          - CONTRACT_PROCEEDS
+        plannedEndDate:
+          type: string
+          format: date
+          description: 'Плановая дата окончания кредита/лимита/линии: закреплённая asOfDate исходной попытки + termMonths
+            календарных месяцев. Технический retry её не сдвигает. Для овердрафта это окончание лимита, не 30-дневного
+            долга.'
+        trancheTermMonths:
+          anyOf:
+          - type: integer
+            minimum: 3
+            maximum: 6
+          - type: 'null'
+        maxDebtPeriodDays:
+          anyOf:
+          - type: integer
+            const: 30
+          - type: 'null'
       required:
       - amount
       - currency
       - termMonths
       - annualRatePercent
       - repaymentDescription
+      - financingType
+      - repaymentType
+      - plannedEndDate
+      - trancheTermMonths
+      - maxDebtPeriodDays
+      allOf:
+      - if:
+          properties:
+            financingType:
+              const: TERM_LOAN
+          required:
+          - financingType
+        then:
+          properties:
+            trancheTermMonths:
+              type: 'null'
+            maxDebtPeriodDays:
+              type: 'null'
+      - if:
+          properties:
+            financingType:
+              const: OVERDRAFT
+          required:
+          - financingType
+        then:
+          properties:
+            trancheTermMonths:
+              type: 'null'
+            maxDebtPeriodDays:
+              const: 30
+      - if:
+          properties:
+            financingType:
+              const: REVOLVING_LINE
+          required:
+          - financingType
+        then:
+          properties:
+            trancheTermMonths:
+              type: integer
+              minimum: 3
+              maximum: 6
+            maxDebtPeriodDays:
+              type: 'null'
+      - if:
+          properties:
+            financingType:
+              const: NON_REVOLVING_LINE
+          required:
+          - financingType
+        then:
+          properties:
+            trancheTermMonths:
+              type: 'null'
+            maxDebtPeriodDays:
+              type: 'null'
     ApprovedDecision:
       type: object
       additionalProperties: false
@@ -1928,6 +2394,11 @@ components:
           type: string
           format: date-time
           pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+        calculationDate:
+          type: string
+          format: date
+          description: UTC-дата создания черновика, фиксирует reportingPeriod. Не является датой выдачи или началом срока
+            нового финансирования. asOfDate попытки фиксируется отдельно при submit, plannedEndDate вычисляется от неё.
       required:
       - id
       - version
@@ -1943,6 +2414,7 @@ components:
       - allowedActions
       - createdAt
       - updatedAt
+      - calculationDate
       allOf:
       - if:
           properties:
@@ -1952,10 +2424,6 @@ components:
           - status
         then:
           properties:
-            allowedActions:
-              const:
-              - UPDATE_FORM
-              - SUBMIT
             decision:
               type: 'null'
             requiredInformation:
@@ -1966,6 +2434,10 @@ components:
               type: 'null'
             lastSubmittedAt:
               type: 'null'
+            allowedActions:
+              const:
+              - UPDATE_FORM
+              - SUBMIT
       - if:
           properties:
             status:
@@ -1974,8 +2446,6 @@ components:
           - status
         then:
           properties:
-            allowedActions:
-              const: []
             decision:
               type: 'null'
             requiredInformation:
@@ -1988,7 +2458,8 @@ components:
             lastSubmittedAt:
               type: string
               format: date-time
-              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            allowedActions:
+              const: []
             form:
               properties:
                 amount:
@@ -2009,10 +2480,6 @@ components:
           - status
         then:
           properties:
-            allowedActions:
-              const:
-              - UPDATE_FORM
-              - SUBMIT
             decision:
               type: 'null'
             requiredInformation:
@@ -2025,7 +2492,10 @@ components:
             lastSubmittedAt:
               type: string
               format: date-time
-              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            allowedActions:
+              const:
+              - UPDATE_FORM
+              - SUBMIT
       - if:
           properties:
             status:
@@ -2034,9 +2504,6 @@ components:
           - status
         then:
           properties:
-            allowedActions:
-              const:
-              - RETRY
             decision:
               type: 'null'
             requiredInformation:
@@ -2049,7 +2516,9 @@ components:
             lastSubmittedAt:
               type: string
               format: date-time
-              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            allowedActions:
+              const:
+              - RETRY
             form:
               properties:
                 amount:
@@ -2070,8 +2539,6 @@ components:
           - status
         then:
           properties:
-            allowedActions:
-              const: []
             decision:
               $ref: '#/components/schemas/ApprovedDecision'
             requiredInformation:
@@ -2084,7 +2551,8 @@ components:
             lastSubmittedAt:
               type: string
               format: date-time
-              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            allowedActions:
+              const: []
             form:
               properties:
                 amount:
@@ -2105,8 +2573,6 @@ components:
           - status
         then:
           properties:
-            allowedActions:
-              const: []
             decision:
               $ref: '#/components/schemas/DeclinedDecision'
             requiredInformation:
@@ -2119,7 +2585,8 @@ components:
             lastSubmittedAt:
               type: string
               format: date-time
-              pattern: ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$
+            allowedActions:
+              const: []
             form:
               properties:
                 amount:
@@ -2138,45 +2605,341 @@ components:
               properties:
                 code:
                   const: WORKING_CAPITAL
+              required:
+              - code
+          required:
+          - product
         then:
           properties:
             form:
               properties:
-                equipment:
+                financingPurpose:
                   type: 'null'
+                projectBudget:
+                  type: 'null'
+                trancheTermMonths:
+                  type: 'null'
+                governmentContract:
+                  type: 'null'
+            reportingPeriod:
+              properties:
+                months:
+                  const: 6
       - if:
           properties:
             product:
               properties:
                 code:
-                  const: EQUIPMENT
-            status:
-              enum:
-              - CHECKING
-              - TECHNICAL_HOLD
-              - APPROVED
-              - DECLINED
+                  const: OVERDRAFT
+              required:
+              - code
+          required:
+          - product
         then:
           properties:
             form:
               properties:
-                equipment:
-                  type: object
-                  additionalProperties: false
-                  properties:
-                    name:
-                      type: string
-                      minLength: 1
-                      maxLength: 300
-                      pattern: '[\s\S]*\S[\s\S]*'
-                    purchasePrice:
-                      $ref: '#/components/schemas/PositiveMoney'
-                  required:
-                  - name
-                  - purchasePrice
+                financingPurpose:
+                  type: 'null'
+                projectBudget:
+                  type: 'null'
+                trancheTermMonths:
+                  type: 'null'
+                governmentContract:
+                  type: 'null'
+            reportingPeriod:
+              properties:
+                months:
+                  const: 3
+      - if:
+          allOf:
+          - properties:
+              product:
+                properties:
+                  code:
+                    const: OVERDRAFT
+                required:
+                - code
+            required:
+            - product
+          - properties:
+              status:
+                enum:
+                - CHECKING
+                - TECHNICAL_HOLD
+                - APPROVED
+                - DECLINED
+            required:
+            - status
+        then:
+          properties:
+            form:
+              properties:
+                termMonths:
+                  type: integer
+                  const: 12
+      - if:
+          properties:
+            product:
+              properties:
+                code:
+                  const: REVOLVING_LINE
+              required:
+              - code
+          required:
+          - product
+        then:
+          properties:
+            form:
+              properties:
+                financingPurpose:
+                  type: 'null'
+                projectBudget:
+                  type: 'null'
+                governmentContract:
+                  type: 'null'
+            reportingPeriod:
+              properties:
+                months:
+                  const: 6
+      - if:
+          allOf:
+          - properties:
+              product:
+                properties:
+                  code:
+                    const: REVOLVING_LINE
+                required:
+                - code
+            required:
+            - product
+          - properties:
+              status:
+                enum:
+                - CHECKING
+                - TECHNICAL_HOLD
+                - APPROVED
+                - DECLINED
+            required:
+            - status
+        then:
+          properties:
+            form:
+              properties:
+                trancheTermMonths:
+                  type: integer
+                  minimum: 3
+                  maximum: 6
+                termMonths:
+                  type: integer
+                  const: 24
+      - if:
+          properties:
+            product:
+              properties:
+                code:
+                  const: LONG_TERM
+              required:
+              - code
+          required:
+          - product
+        then:
+          properties:
+            form:
+              properties:
+                trancheTermMonths:
+                  type: 'null'
+                governmentContract:
+                  type: 'null'
+            reportingPeriod:
+              properties:
+                months:
+                  const: 12
+      - if:
+          allOf:
+          - properties:
+              product:
+                properties:
+                  code:
+                    const: LONG_TERM
+                required:
+                - code
+            required:
+            - product
+          - properties:
+              status:
+                enum:
+                - CHECKING
+                - TECHNICAL_HOLD
+                - APPROVED
+                - DECLINED
+            required:
+            - status
+        then:
+          properties:
+            form:
+              properties:
+                financingPurpose:
+                  type: string
+                  minLength: 1
+                  maxLength: 1000
+                  pattern: '[\s\S]*\S[\s\S]*'
+                projectBudget:
+                  $ref: '#/components/schemas/PositiveMoney'
+      - if:
+          properties:
+            product:
+              properties:
+                code:
+                  const: GOVERNMENT_CONTRACT_LINE
+              required:
+              - code
+          required:
+          - product
+        then:
+          properties:
+            form:
+              properties:
+                financingPurpose:
+                  type: 'null'
+                projectBudget:
+                  type: 'null'
+                trancheTermMonths:
+                  type: 'null'
+            reportingPeriod:
+              properties:
+                months:
+                  const: 12
+      - if:
+          allOf:
+          - properties:
+              product:
+                properties:
+                  code:
+                    const: GOVERNMENT_CONTRACT_LINE
+                required:
+                - code
+            required:
+            - product
+          - properties:
+              status:
+                enum:
+                - CHECKING
+                - TECHNICAL_HOLD
+                - APPROVED
+                - DECLINED
+            required:
+            - status
+        then:
+          properties:
+            form:
+              properties:
+                governmentContract:
+                  allOf:
+                  - $ref: '#/components/schemas/GovernmentContractForm'
+                  - properties:
+                      number:
+                        type: string
+                        minLength: 1
+                        maxLength: 100
+                        pattern: '[\s\S]*\S[\s\S]*'
+                      contractAmount:
+                        $ref: '#/components/schemas/PositiveMoney'
+                      advanceAmount:
+                        $ref: '#/components/schemas/Money'
+                      executionEndDate:
+                        type: string
+                        format: date
+                      finalPaymentDate:
+                        type: string
+                        format: date
       description: В DRAFT/NEEDS_INFO product содержит актуальные условия для следующей отправки; в остальных состояниях
         — снимок условий последней попытки. version меняется и при переходах состояния. allowedActions — разрешённые
         операции, не гарантия валидности формы или одобрения.
+    OverdraftRules:
+      type: object
+      additionalProperties: false
+      properties:
+        maxInflowSharePercent:
+          type: string
+          const: '30.00'
+        maxDebtPeriodDays:
+          type: integer
+          const: 30
+      required:
+      - maxInflowSharePercent
+      - maxDebtPeriodDays
+    RevolvingLineRules:
+      type: object
+      additionalProperties: false
+      properties:
+        minTrancheTermMonths:
+          type: integer
+          const: 3
+        maxTrancheTermMonths:
+          type: integer
+          const: 6
+      required:
+      - minTrancheTermMonths
+      - maxTrancheTermMonths
+    GovernmentContractRules:
+      type: object
+      additionalProperties: false
+      properties:
+        maxNetContractSharePercent:
+          type: string
+          const: '70.00'
+        maxDaysAfterFinalPayment:
+          type: integer
+          const: 30
+        renewable:
+          type: boolean
+          const: false
+      required:
+      - maxNetContractSharePercent
+      - maxDaysAfterFinalPayment
+      - renewable
+    GovernmentContractForm:
+      type: object
+      additionalProperties: false
+      properties:
+        lawCode:
+          type: string
+          const: 44_FZ
+        number:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 100
+            pattern: '[\s\S]*\S[\s\S]*'
+          - type: 'null'
+        contractAmount:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        advanceAmount:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+        executionEndDate:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+        finalPaymentDate:
+          anyOf:
+          - type: string
+            format: date
+          - type: 'null'
+      required:
+      - lawCode
+      - number
+      - contractAmount
+      - advanceAmount
+      - executionEndDate
+      - finalPaymentDate
+      description: Сведения о заключённом контракте по 44-ФЗ; неполные поля допустимы в черновике. Факт заключения/данные
+        демонстрационные, реальная проверка реестра не выполняется.
   examples:
     ApplicationDraft:
       summary: DRAFT
@@ -2187,28 +2950,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: null
         lastSubmittedAt: null
         decision: null
@@ -2219,6 +2997,7 @@ components:
         - SUBMIT
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:01:00Z'
+        calculationDate: '2026-10-22'
     ApplicationChecking:
       summary: CHECKING
       value:
@@ -2228,28 +3007,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -2258,6 +3052,7 @@ components:
         allowedActions: []
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:00Z'
+        calculationDate: '2026-10-22'
     ApplicationNeedsInfo:
       summary: NEEDS_INFO — нулевые поступления требуют подтверждения либо исправления
       value:
@@ -2265,32 +3060,45 @@ components:
         version: 3
         status: NEEDS_INFO
         product:
-          code: EQUIPMENT
-          name: Кредит на оборудование
-          description: Приобретение оборудования для бизнеса.
+          code: LONG_TERM
+          name: Кредит на длительный срок
+          description: Одна сумма на оборудование, ремонт помещения или расширение бизнеса.
           terms:
-            version: demo-equipment-1
+            version: demo-long-term-2
             currency: RUB
-            minAmount: '200000.00'
-            maxAmount: '4000000.00'
-            minTermMonths: 6
-            maxTermMonths: 36
-            annualRatePercent: '18.00'
+            minAmount: '500000.00'
+            maxAmount: '5000000.00'
+            minTermMonths: 24
+            maxTermMonths: 60
+            annualRatePercent: '22.00'
             minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            financialPeriodMonths: 12
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой на заявленную цель и бюджет покупки или проекта.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
           startDate: '2025-10-01'
           endDate: '2026-09-30'
           months: 12
         form:
           amount: '500000.00'
-          termMonths: 12
+          termMonths: 24
           averageMonthlyInflow: '0.00'
           averageMonthlyOutflow: '800000.00'
-          equipment:
-            name: Оборудование
-            purchasePrice: '600000.00'
+          financingPurpose: Покупка печи для пекарни
+          projectBudget: '600000.00'
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 36f3f1b9-93bd-44ed-b806-564aa2c54ef7
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -2298,7 +3106,8 @@ components:
         - clarificationId: 1f9bd36f-e62b-47cd-a8c3-fc3227fc6893
           field: form.averageMonthlyInflow
           code: ZERO_INFLOW_CONFIRMATION
-          message: Подтвердите, что среднемесячные поступления за указанный отчётный период равны нулю, либо исправьте значение.
+          message: Подтвердите, что среднемесячные поступления за указанный отчётный период равны нулю, либо исправьте
+            значение.
           observedValue: '0.00'
         processingError: null
         allowedActions:
@@ -2306,6 +3115,7 @@ components:
         - SUBMIT
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
     ApplicationTechnicalHold:
       summary: TECHNICAL_HOLD
       value:
@@ -2315,28 +3125,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -2349,6 +3174,7 @@ components:
         - RETRY
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
     ApplicationCreditHistoryUnavailable:
       summary: TECHNICAL_HOLD / CREDIT_HISTORY_UNAVAILABLE
       value:
@@ -2358,28 +3184,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -2392,6 +3233,7 @@ components:
         - RETRY
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
     ApplicationCreditHistoryTimeout:
       summary: TECHNICAL_HOLD / CREDIT_HISTORY_TIMEOUT
       value:
@@ -2401,28 +3243,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -2435,6 +3292,7 @@ components:
         - RETRY
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
     ApplicationCreditHistoryInvalidResponse:
       summary: TECHNICAL_HOLD / CREDIT_HISTORY_INVALID_RESPONSE
       value:
@@ -2444,28 +3302,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -2478,6 +3351,7 @@ components:
         - RETRY
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
     ApplicationApproved:
       summary: APPROVED
       value:
@@ -2487,28 +3361,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -2519,13 +3408,19 @@ components:
             amount: '500000.00'
             currency: RUB
             termMonths: 12
-            annualRatePercent: '20.00'
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            annualRatePercent: '24.00'
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            plannedEndDate: '2027-10-22'
+            trancheTermMonths: null
+            maxDebtPeriodDays: null
         requiredInformation: []
         processingError: null
         allowedActions: []
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
     ApplicationDeclined:
       summary: DECLINED
       value:
@@ -2535,28 +3430,43 @@ components:
         product:
           code: WORKING_CAPITAL
           name: Оборотный кредит
-          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
           terms:
-            version: demo-working-capital-1
+            version: demo-working-capital-2
             currency: RUB
             minAmount: '100000.00'
-            maxAmount: '2000000.00'
+            maxAmount: '3000000.00'
             minTermMonths: 3
-            maxTermMonths: 18
-            annualRatePercent: '20.00'
-            minBusinessAgeMonths: 12
-            disbursementDescription: Получение одной суммой.
-            repaymentDescription: Возврат по согласованному демонстрационному графику.
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
         reportingPeriod:
-          startDate: '2025-10-01'
+          startDate: '2026-04-01'
           endDate: '2026-09-30'
-          months: 12
+          months: 6
         form:
           amount: '500000.00'
           termMonths: 12
           averageMonthlyInflow: '1200000.00'
           averageMonthlyOutflow: '800000.00'
-          equipment: null
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -2570,4 +3480,670 @@ components:
         allowedActions: []
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
+    ApplicationWorkingCapital:
+      summary: Черновик Оборотный кредит
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 1
+        status: DRAFT
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
+          terms:
+            version: demo-working-capital-2
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '3000000.00'
+            minTermMonths: 3
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2026-04-01'
+          endDate: '2026-09-30'
+          months: 6
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
+        assessmentId: null
+        lastSubmittedAt: null
+        decision: null
+        requiredInformation: []
+        processingError: null
+        allowedActions:
+        - UPDATE_FORM
+        - SUBMIT
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:01:00Z'
+        calculationDate: '2026-10-22'
+    ApplicationOverdraft:
+      summary: Черновик Овердрафт
+      value:
+        id: 18058978-e887-5c5c-acb6-0c4589b9d9a0
+        version: 1
+        status: DRAFT
+        product:
+          code: OVERDRAFT
+          name: Овердрафт
+          description: Лимит к расчётному счёту для временного недостатка средств до ближайших поступлений.
+          terms:
+            version: demo-overdraft-2
+            currency: RUB
+            minAmount: '50000.00'
+            maxAmount: '1000000.00'
+            minTermMonths: 12
+            maxTermMonths: 12
+            annualRatePercent: '26.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 3
+            financingType: OVERDRAFT
+            repaymentType: ACCOUNT_SWEEP
+            requiresSettlementAccount: true
+            requiresRegularInflow: true
+            overdraftRules:
+              maxInflowSharePercent: '30.00'
+              maxDebtPeriodDays: 30
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Использование лимита при недостатке собственных средств на расчётном счёте.
+            repaymentDescription: Автоматически из поступлений; задолженность полностью погашается за 30 дней с первого
+              использования, новые расходы срок не продлевают. Проценты ежемесячно. После полного погашения лимит снова
+              доступен.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2026-07-01'
+          endDate: '2026-09-30'
+          months: 3
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '2000000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
+        assessmentId: null
+        lastSubmittedAt: null
+        decision: null
+        requiredInformation: []
+        processingError: null
+        allowedActions:
+        - UPDATE_FORM
+        - SUBMIT
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:01:00Z'
+        calculationDate: '2026-10-22'
+    ApplicationRevolvingLine:
+      summary: Черновик Возобновляемая кредитная линия
+      value:
+        id: 61d25ecc-4fe3-5cff-bc35-106d16b43c94
+        version: 1
+        status: DRAFT
+        product:
+          code: REVOLVING_LINE
+          name: Возобновляемая кредитная линия
+          description: Общий лимит для регулярных закупок; деньги получают частями, погашенный основной долг восстанавливает
+            доступный лимит.
+          terms:
+            version: demo-revolving-line-2
+            currency: RUB
+            minAmount: '300000.00'
+            maxAmount: '5000000.00'
+            minTermMonths: 24
+            maxTermMonths: 24
+            annualRatePercent: '23.00'
+            minBusinessAgeMonths: 12
+            financialPeriodMonths: 6
+            financingType: REVOLVING_LINE
+            repaymentType: EQUAL_PRINCIPAL_PER_TRANCHE
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules:
+              minTrancheTermMonths: 3
+              maxTrancheTermMonths: 6
+            governmentContractRules: null
+            disbursementDescription: Траншами в пределах возобновляемого лимита; неиспользованный лимит бесплатный.
+            repaymentDescription: По каждому траншу ежемесячно равные доли основного долга плюс проценты на остаток.
+              Срок транша 3–6 месяцев, возврат не позднее окончания линии.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2026-04-01'
+          endDate: '2026-09-30'
+          months: 6
+        form:
+          amount: '500000.00'
+          termMonths: 24
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: 3
+          governmentContract: null
+        assessmentId: null
+        lastSubmittedAt: null
+        decision: null
+        requiredInformation: []
+        processingError: null
+        allowedActions:
+        - UPDATE_FORM
+        - SUBMIT
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:01:00Z'
+        calculationDate: '2026-10-22'
+    ApplicationLongTerm:
+      summary: Черновик Кредит на длительный срок
+      value:
+        id: ab47a197-f74d-509f-99c5-2d83597cd6b3
+        version: 1
+        status: DRAFT
+        product:
+          code: LONG_TERM
+          name: Кредит на длительный срок
+          description: Одна сумма на оборудование, ремонт помещения или расширение бизнеса.
+          terms:
+            version: demo-long-term-2
+            currency: RUB
+            minAmount: '500000.00'
+            maxAmount: '5000000.00'
+            minTermMonths: 24
+            maxTermMonths: 60
+            annualRatePercent: '22.00'
+            minBusinessAgeMonths: 12
+            financialPeriodMonths: 12
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой на заявленную цель и бюджет покупки или проекта.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 24
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: Покупка печи для пекарни
+          projectBudget: '600000.00'
+          trancheTermMonths: null
+          governmentContract: null
+        assessmentId: null
+        lastSubmittedAt: null
+        decision: null
+        requiredInformation: []
+        processingError: null
+        allowedActions:
+        - UPDATE_FORM
+        - SUBMIT
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:01:00Z'
+        calculationDate: '2026-10-22'
+    ApplicationGovernmentContractLine:
+      summary: Черновик Кредитная линия на госконтракт
+      value:
+        id: 08ad82b7-7c1c-5ed9-828e-8e21ac02ac32
+        version: 1
+        status: DRAFT
+        product:
+          code: GOVERNMENT_CONTRACT_LINE
+          name: Кредитная линия на госконтракт
+          description: Невозобновляемая линия на исполнение уже заключённого контракта по 44-ФЗ; не для участия в закупке
+            или обеспечения заявки.
+          terms:
+            version: demo-government-contract-line-2
+            currency: RUB
+            minAmount: '300000.00'
+            maxAmount: '10000000.00'
+            minTermMonths: 1
+            maxTermMonths: 12
+            annualRatePercent: '21.00'
+            minBusinessAgeMonths: 12
+            financialPeriodMonths: 12
+            financingType: NON_REVOLVING_LINE
+            repaymentType: CONTRACT_PROCEEDS
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules:
+              maxNetContractSharePercent: '70.00'
+              maxDaysAfterFinalPayment: 30
+              renewable: false
+            disbursementDescription: Траншами до завершения исполнения контракта. Погашение не восстанавливает выбранный
+              лимит.
+            repaymentDescription: Проценты ежемесячно; поступления по контракту направляются на долг. Остаток возвращается
+              к плановой дате даже при задержке оплаты заказчиком; не позднее 30 дней после окончательной оплаты по контракту.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 6
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract:
+            lawCode: 44_FZ
+            number: DEMO-44-001
+            contractAmount: '2000000.00'
+            advanceAmount: '200000.00'
+            executionEndDate: '2027-04-15'
+            finalPaymentDate: '2027-04-30'
+        assessmentId: null
+        lastSubmittedAt: null
+        decision: null
+        requiredInformation: []
+        processingError: null
+        allowedActions:
+        - UPDATE_FORM
+        - SUBMIT
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:01:00Z'
+        calculationDate: '2026-10-22'
+    ApplicationCurrentOverdueDebt:
+      summary: Отказ до ML по текущей просрочке
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 3
+        status: DECLINED
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Одна сумма на закупки товаров, сырья и текущие расходы бизнеса.
+          terms:
+            version: demo-working-capital-2
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '3000000.00'
+            minTermMonths: 3
+            maxTermMonths: 12
+            annualRatePercent: '24.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 6
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2026-04-01'
+          endDate: '2026-09-30'
+          months: 6
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision:
+          type: DECLINED
+          decidedAt: '2026-10-22T10:02:01Z'
+          reasons:
+          - code: CURRENT_OVERDUE_DEBT
+            message: Обнаружена текущая просроченная задолженность.
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
+    ApplicationApprovedOverdraft:
+      summary: Одобренные условия Овердрафт (не выдача)
+      value:
+        id: 18058978-e887-5c5c-acb6-0c4589b9d9a0
+        version: 3
+        status: APPROVED
+        product:
+          code: OVERDRAFT
+          name: Овердрафт
+          description: Лимит к расчётному счёту для временного недостатка средств до ближайших поступлений.
+          terms:
+            version: demo-overdraft-2
+            currency: RUB
+            minAmount: '50000.00'
+            maxAmount: '1000000.00'
+            minTermMonths: 12
+            maxTermMonths: 12
+            annualRatePercent: '26.00'
+            minBusinessAgeMonths: 6
+            financialPeriodMonths: 3
+            financingType: OVERDRAFT
+            repaymentType: ACCOUNT_SWEEP
+            requiresSettlementAccount: true
+            requiresRegularInflow: true
+            overdraftRules:
+              maxInflowSharePercent: '30.00'
+              maxDebtPeriodDays: 30
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Использование лимита при недостатке собственных средств на расчётном счёте.
+            repaymentDescription: Автоматически из поступлений; задолженность полностью погашается за 30 дней с первого
+              использования, новые расходы срок не продлевают. Проценты ежемесячно. После полного погашения лимит снова
+              доступен.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2026-07-01'
+          endDate: '2026-09-30'
+          months: 3
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '2000000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract: null
+        assessmentId: 71b03990-acdb-5ee6-9f50-31aca81edaf5
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision:
+          type: APPROVED
+          decidedAt: '2026-10-22T10:02:01Z'
+          reasons: []
+          terms:
+            amount: '500000.00'
+            currency: RUB
+            termMonths: 12
+            annualRatePercent: '26.00'
+            repaymentDescription: Автоматически из поступлений; задолженность полностью погашается за 30 дней с первого
+              использования, новые расходы срок не продлевают. Проценты ежемесячно. После полного погашения лимит снова
+              доступен.
+            financingType: OVERDRAFT
+            repaymentType: ACCOUNT_SWEEP
+            plannedEndDate: '2027-10-22'
+            trancheTermMonths: null
+            maxDebtPeriodDays: 30
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
+    ApplicationApprovedRevolvingLine:
+      summary: Одобренные условия Возобновляемая кредитная линия (не выдача)
+      value:
+        id: 61d25ecc-4fe3-5cff-bc35-106d16b43c94
+        version: 3
+        status: APPROVED
+        product:
+          code: REVOLVING_LINE
+          name: Возобновляемая кредитная линия
+          description: Общий лимит для регулярных закупок; деньги получают частями, погашенный основной долг восстанавливает
+            доступный лимит.
+          terms:
+            version: demo-revolving-line-2
+            currency: RUB
+            minAmount: '300000.00'
+            maxAmount: '5000000.00'
+            minTermMonths: 24
+            maxTermMonths: 24
+            annualRatePercent: '23.00'
+            minBusinessAgeMonths: 12
+            financialPeriodMonths: 6
+            financingType: REVOLVING_LINE
+            repaymentType: EQUAL_PRINCIPAL_PER_TRANCHE
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules:
+              minTrancheTermMonths: 3
+              maxTrancheTermMonths: 6
+            governmentContractRules: null
+            disbursementDescription: Траншами в пределах возобновляемого лимита; неиспользованный лимит бесплатный.
+            repaymentDescription: По каждому траншу ежемесячно равные доли основного долга плюс проценты на остаток.
+              Срок транша 3–6 месяцев, возврат не позднее окончания линии.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2026-04-01'
+          endDate: '2026-09-30'
+          months: 6
+        form:
+          amount: '500000.00'
+          termMonths: 24
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: 3
+          governmentContract: null
+        assessmentId: faef1799-2a90-5d43-97ae-3842eebd345c
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision:
+          type: APPROVED
+          decidedAt: '2026-10-22T10:02:01Z'
+          reasons: []
+          terms:
+            amount: '500000.00'
+            currency: RUB
+            termMonths: 24
+            annualRatePercent: '23.00'
+            repaymentDescription: По каждому траншу ежемесячно равные доли основного долга плюс проценты на остаток.
+              Срок транша 3–6 месяцев, возврат не позднее окончания линии.
+            financingType: REVOLVING_LINE
+            repaymentType: EQUAL_PRINCIPAL_PER_TRANCHE
+            plannedEndDate: '2028-10-22'
+            trancheTermMonths: 3
+            maxDebtPeriodDays: null
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
+    ApplicationApprovedLongTerm:
+      summary: Одобренные условия Кредит на длительный срок (не выдача)
+      value:
+        id: ab47a197-f74d-509f-99c5-2d83597cd6b3
+        version: 3
+        status: APPROVED
+        product:
+          code: LONG_TERM
+          name: Кредит на длительный срок
+          description: Одна сумма на оборудование, ремонт помещения или расширение бизнеса.
+          terms:
+            version: demo-long-term-2
+            currency: RUB
+            minAmount: '500000.00'
+            maxAmount: '5000000.00'
+            minTermMonths: 24
+            maxTermMonths: 60
+            annualRatePercent: '22.00'
+            minBusinessAgeMonths: 12
+            financialPeriodMonths: 12
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules: null
+            disbursementDescription: Вся сумма одной выплатой на заявленную цель и бюджет покупки или проекта.
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 24
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: Покупка печи для пекарни
+          projectBudget: '600000.00'
+          trancheTermMonths: null
+          governmentContract: null
+        assessmentId: fc2a5caf-3d1a-52de-8609-dc68ad5ac32c
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision:
+          type: APPROVED
+          decidedAt: '2026-10-22T10:02:01Z'
+          reasons: []
+          terms:
+            amount: '500000.00'
+            currency: RUB
+            termMonths: 24
+            annualRatePercent: '22.00'
+            repaymentDescription: Ежемесячно равными платежами; проценты начисляются на остаток долга.
+            financingType: TERM_LOAN
+            repaymentType: ANNUITY
+            plannedEndDate: '2028-10-22'
+            trancheTermMonths: null
+            maxDebtPeriodDays: null
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
+    ApplicationApprovedGovernmentContractLine:
+      summary: Одобренные условия Кредитная линия на госконтракт (не выдача)
+      value:
+        id: 08ad82b7-7c1c-5ed9-828e-8e21ac02ac32
+        version: 3
+        status: APPROVED
+        product:
+          code: GOVERNMENT_CONTRACT_LINE
+          name: Кредитная линия на госконтракт
+          description: Невозобновляемая линия на исполнение уже заключённого контракта по 44-ФЗ; не для участия в закупке
+            или обеспечения заявки.
+          terms:
+            version: demo-government-contract-line-2
+            currency: RUB
+            minAmount: '300000.00'
+            maxAmount: '10000000.00'
+            minTermMonths: 1
+            maxTermMonths: 12
+            annualRatePercent: '21.00'
+            minBusinessAgeMonths: 12
+            financialPeriodMonths: 12
+            financingType: NON_REVOLVING_LINE
+            repaymentType: CONTRACT_PROCEEDS
+            requiresSettlementAccount: false
+            requiresRegularInflow: false
+            overdraftRules: null
+            revolvingLineRules: null
+            governmentContractRules:
+              maxNetContractSharePercent: '70.00'
+              maxDaysAfterFinalPayment: 30
+              renewable: false
+            disbursementDescription: Траншами до завершения исполнения контракта. Погашение не восстанавливает выбранный
+              лимит.
+            repaymentDescription: Проценты ежемесячно; поступления по контракту направляются на долг. Остаток возвращается
+              к плановой дате даже при задержке оплаты заказчиком; не позднее 30 дней после окончательной оплаты по контракту.
+            generalConditions: Учебный проект. Условия демонстрационные. RUB для ИП и ООО, зарегистрированных в России.
+              Залог и поручительство не требуются. Комиссий за выдачу и обслуживание нет; обязательная страховка отсутствует.
+              Досрочное погашение без комиссии, проценты за фактическое время использования денег. Отсутствие текущей
+              просрочки обязательно; соблюдение требований не гарантирует одобрение.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 6
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          financingPurpose: null
+          projectBudget: null
+          trancheTermMonths: null
+          governmentContract:
+            lawCode: 44_FZ
+            number: DEMO-44-001
+            contractAmount: '2000000.00'
+            advanceAmount: '200000.00'
+            executionEndDate: '2027-04-15'
+            finalPaymentDate: '2027-04-30'
+        assessmentId: e302092b-3631-569e-8a7e-dca39710f480
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision:
+          type: APPROVED
+          decidedAt: '2026-10-22T10:02:01Z'
+          reasons: []
+          terms:
+            amount: '500000.00'
+            currency: RUB
+            termMonths: 6
+            annualRatePercent: '21.00'
+            repaymentDescription: Проценты ежемесячно; поступления по контракту направляются на долг. Остаток возвращается
+              к плановой дате даже при задержке оплаты заказчиком; не позднее 30 дней после окончательной оплаты по контракту.
+            financingType: NON_REVOLVING_LINE
+            repaymentType: CONTRACT_PROCEEDS
+            plannedEndDate: '2027-04-22'
+            trancheTermMonths: null
+            maxDebtPeriodDays: null
+        requiredInformation: []
+        processingError: null
+        allowedActions: []
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+        calculationDate: '2026-10-22'
 x-idempotency-retention-hours: 24

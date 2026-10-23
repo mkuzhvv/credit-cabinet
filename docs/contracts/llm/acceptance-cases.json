@@ -1,27 +1,27 @@
 {
-  "schemaVersion": "1",
-  "description": "Смысловая приёмка ML: для каждого вопроса использовать контекст product-request.json, заменив message. Формулировка ответа не фиксирована. Ожидаемый код и поведение проверяются отдельно от JSON Schema. Эти случаи ещё не прогонялись на модели.",
+  "schemaVersion": "2",
+  "description": "Смысловая приёмка пяти продуктов: использовать product-request.json со schemaVersion=2, заменяя message. Текст не фиксируется, ожидаемый код и поведение проверяются отдельно. Реальный прогон модели ещё не выполнен.",
   "contextFixture": "examples/product-request.json",
   "cases": [
     {
       "id": "equipment-oven",
       "message": "Хочу купить печь для пекарни.",
       "expected": {
-        "recommendedProductCode": "EQUIPMENT",
-        "behavior": "Рекомендовать оборудование, не обещать одобрение."
+        "recommendedProductCode": "LONG_TERM",
+        "behavior": "Рекомендовать кредит на длительный срок для оборудования, без гарантии одобрения."
       }
     },
     {
       "id": "equipment-machine",
       "message": "Нужен станок для мастерской.",
       "expected": {
-        "recommendedProductCode": "EQUIPMENT",
-        "behavior": "Связать потребность с покупкой оборудования."
+        "recommendedProductCode": "LONG_TERM",
+        "behavior": "Рекомендовать кредит на длительный срок для оборудования, без гарантии одобрения."
       }
     },
     {
       "id": "working-stock",
-      "message": "Нужно закупить товар для магазина.",
+      "message": "Мне нужна одна сумма на разовую закупку товара для магазина.",
       "expected": {
         "recommendedProductCode": "WORKING_CAPITAL",
         "behavior": "Рекомендовать оборотный кредит."
@@ -29,7 +29,7 @@
     },
     {
       "id": "working-raw",
-      "message": "Нужны деньги на сырьё для производства.",
+      "message": "Нужна одна сумма на разовую закупку сырья, регулярная линия не нужна.",
       "expected": {
         "recommendedProductCode": "WORKING_CAPITAL",
         "behavior": "Рекомендовать оборотный кредит."
@@ -60,19 +60,19 @@
       }
     },
     {
-      "id": "missing-overdraft",
-      "message": "Хочу оформить овердрафт.",
+      "id": "overdraft-needed",
+      "message": "Хочу оформить овердрафт, оплатить сейчас и вернуть из поступления через неделю.",
       "expected": {
-        "recommendedProductCode": null,
-        "behavior": "Не рекомендовать отсутствующий продукт; объяснить состав каталога."
+        "recommendedProductCode": "OVERDRAFT",
+        "behavior": "Рекомендовать овердрафт и объяснить 30-дневное погашение без гарантии."
       }
     },
     {
-      "id": "missing-credit-line",
+      "id": "revolving-needed",
       "message": "Нужна возобновляемая кредитная линия.",
       "expected": {
-        "recommendedProductCode": null,
-        "behavior": "Не придумывать условия отсутствующей линии."
+        "recommendedProductCode": "REVOLVING_LINE",
+        "behavior": "Объяснить восстановление лимита после погашения основного долга."
       }
     },
     {
@@ -80,7 +80,7 @@
       "message": "Какие продукты доступны?",
       "expected": {
         "recommendedProductCode": null,
-        "behavior": "Назвать только два продукта входного каталога."
+        "behavior": "Назвать пять продуктов входного каталога, не придумывать шестой."
       }
     },
     {
@@ -104,7 +104,7 @@
       "message": "За какой период считать среднее?",
       "expected": {
         "recommendedProductCode": null,
-        "behavior": "12 полных месяцев по определению; не советовать произвольный другой период."
+        "behavior": "Без выбранного продукта уточнить продукт либо объяснить периоды 3/6/12 месяцев; не навязывать всем 12 месяцев."
       }
     },
     {
@@ -112,7 +112,7 @@
       "message": "Срок указывается в годах?",
       "expected": {
         "recommendedProductCode": null,
-        "behavior": "Объяснить целые месяцы и условия выбранного продукта."
+        "behavior": "Объяснить месяцы кредита/линии; отдельно различать срок транша и 30 дней задолженности по овердрафту."
       }
     },
     {
@@ -161,6 +161,134 @@
       "expected": {
         "recommendedProductCode": null,
         "behavior": "Коротко вернуть разговор к продуктам и заполнению заявки."
+      }
+    },
+    {
+      "id": "long-renovation",
+      "message": "Нужен кредит на ремонт помещения на три года.",
+      "expected": {
+        "recommendedProductCode": "LONG_TERM",
+        "behavior": "Не требовать покупки оборудования; объяснить цель и бюджет проекта."
+      }
+    },
+    {
+      "id": "long-expansion",
+      "message": "Хочу открыть вторую точку и возвращать деньги несколько лет.",
+      "expected": {
+        "recommendedProductCode": "LONG_TERM",
+        "behavior": "Рекомендовать длительный срок без обещания результата."
+      }
+    },
+    {
+      "id": "overdraft-limit",
+      "message": "Какой максимальный овердрафт при среднемесячных поступлениях 2 млн?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Объяснить min(1 млн, 30% поступлений): 600 тыс., с учётом проверки и остальных требований."
+      }
+    },
+    {
+      "id": "overdraft-deadline",
+      "message": "Если я ещё потрачу из овердрафта, 30 дней начнутся заново?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Нет, новые расходы не продлевают срок с первого использования."
+      }
+    },
+    {
+      "id": "overdraft-period",
+      "message": "За сколько месяцев нужны поступления для овердрафта?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "За три полных календарных месяца указанного периода."
+      }
+    },
+    {
+      "id": "line-regular-purchases",
+      "message": "Нужны регулярные закупки разными суммами с восстановлением лимита.",
+      "expected": {
+        "recommendedProductCode": "REVOLVING_LINE",
+        "behavior": "Отличить линию от одной выплаты и овердрафта."
+      }
+    },
+    {
+      "id": "line-two-terms",
+      "message": "У линии срок 24 месяца, значит каждый транш на два года?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Транш 3–6 месяцев и не позднее окончания линии; 24 месяца — срок линии."
+      }
+    },
+    {
+      "id": "line-refill",
+      "message": "По возобновляемой линии вернул основной долг — можно снова взять?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Да в пределах восстановленного лимита; возврат процентов сам по себе лимит не восстанавливает."
+      }
+    },
+    {
+      "id": "gov-signed",
+      "message": "Уже заключён контракт по 44-ФЗ, нужны деньги на материалы до оплаты заказчика.",
+      "expected": {
+        "recommendedProductCode": "GOVERNMENT_CONTRACT_LINE",
+        "behavior": "Рекомендовать линию на исполнение заключённого госконтракта."
+      }
+    },
+    {
+      "id": "gov-limit",
+      "message": "Контракт на 10 млн, аванс 2 млн. Какой предел линии?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Объяснить 70% × (10−2) = 5,6 млн рублей, без обещания одобрения."
+      }
+    },
+    {
+      "id": "gov-no-renewal",
+      "message": "Погасил транш по госконтракту. Этот лимит снова можно выбрать?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Нет, линия невозобновляемая, возврат не восстанавливает выбранную сумму."
+      }
+    },
+    {
+      "id": "gov-delay",
+      "message": "Заказчик задержал оплату. Срок моего долга продлевается автоматически?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Нет, остаток нужно вернуть к установленной дате."
+      }
+    },
+    {
+      "id": "gov-bid-guarantee",
+      "message": "Нужно обеспечение заявки для участия в закупке, контракта ещё нет.",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Линия на госконтракт для этого не предназначена; не рекомендовать её как гарантию."
+      }
+    },
+    {
+      "id": "current-overdue",
+      "message": "Есть текущая просрочка. Можно скрыть её для заявки?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Не советовать скрывать данные; отсутствие текущей просрочки — обязательное условие."
+      }
+    },
+    {
+      "id": "no-history",
+      "message": "Я ещё не брал кредитов. Мне точно откажут?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "Не обещать отказ или одобрение; NO_HISTORY отличается от просрочки, решение после проверки."
+      }
+    },
+    {
+      "id": "common-conditions",
+      "message": "Нужны залог и обязательная страховка? Есть комиссия за досрочное погашение?",
+      "expected": {
+        "recommendedProductCode": null,
+        "behavior": "В демо залог/поручительство/обязательная страховка не требуются; комиссии нет, проценты за фактическое время."
       }
     }
   ]
