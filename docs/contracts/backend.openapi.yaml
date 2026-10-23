@@ -2,12 +2,14 @@ openapi: 3.1.1
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Credit Cabinet — Backend API
-  version: 0.2.0
+  version: 0.3.0
   description: 'Контракт фронтенда с Java. Все примеры синтетические; демонстрационные условия и правила
     заданы в ../CREDIT_POLICY_AND_ML_REQUIREMENTS.md; численный порог ещё не выбран. Общие правила: README.md.
     Сессия cookie, без JWT. Все изменяющие запросы защищены
     CSRF. Требования полей при сохранении и отправке различаются. Версия 0.2.0 добавляет идентифицированные
-    вопросы requiredInformation и clarificationResponses в submit для подтверждения или исправления данных.'
+    вопросы requiredInformation и clarificationResponses в submit для подтверждения или исправления данных.
+    Версия 0.3.0 добавляет технические ошибки получения кредитного профиля. Java получает синтетическую историю
+    автоматически; форма, состояния и контракт LLM не расширяются данными кредитного отчёта.'
 servers:
 - url: /api/v1
   description: Один origin через frontend proxy / общий reverse proxy.
@@ -352,6 +354,12 @@ paths:
                   $ref: '#/components/examples/ApplicationNeedsInfo'
                 technical_hold:
                   $ref: '#/components/examples/ApplicationTechnicalHold'
+                credit_history_unavailable:
+                  $ref: '#/components/examples/ApplicationCreditHistoryUnavailable'
+                credit_history_timeout:
+                  $ref: '#/components/examples/ApplicationCreditHistoryTimeout'
+                credit_history_invalid_response:
+                  $ref: '#/components/examples/ApplicationCreditHistoryInvalidResponse'
                 approved:
                   $ref: '#/components/examples/ApplicationApproved'
                 declined:
@@ -1614,6 +1622,9 @@ components:
           - SCORING_UNAVAILABLE
           - SCORING_TIMEOUT
           - SCORING_INVALID_RESPONSE
+          - CREDIT_HISTORY_UNAVAILABLE
+          - CREDIT_HISTORY_TIMEOUT
+          - CREDIT_HISTORY_INVALID_RESPONSE
           - PROCESSING_INTERRUPTED
         message:
           type: string
@@ -2333,6 +2344,135 @@ components:
         processingError:
           code: SCORING_TIMEOUT
           message: Проверка не завершена. Данные сохранены, можно повторить.
+          occurredAt: '2026-10-22T10:02:01Z'
+        allowedActions:
+        - RETRY
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+    ApplicationCreditHistoryUnavailable:
+      summary: TECHNICAL_HOLD / CREDIT_HISTORY_UNAVAILABLE
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 3
+        status: TECHNICAL_HOLD
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision: null
+        requiredInformation: []
+        processingError:
+          code: CREDIT_HISTORY_UNAVAILABLE
+          message: Источник кредитной истории недоступен. Данные сохранены, можно повторить.
+          occurredAt: '2026-10-22T10:02:01Z'
+        allowedActions:
+        - RETRY
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+    ApplicationCreditHistoryTimeout:
+      summary: TECHNICAL_HOLD / CREDIT_HISTORY_TIMEOUT
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 3
+        status: TECHNICAL_HOLD
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision: null
+        requiredInformation: []
+        processingError:
+          code: CREDIT_HISTORY_TIMEOUT
+          message: Получение кредитного профиля не завершено вовремя. Данные сохранены, можно повторить.
+          occurredAt: '2026-10-22T10:02:01Z'
+        allowedActions:
+        - RETRY
+        createdAt: '2026-10-22T10:00:00Z'
+        updatedAt: '2026-10-22T10:02:01Z'
+    ApplicationCreditHistoryInvalidResponse:
+      summary: TECHNICAL_HOLD / CREDIT_HISTORY_INVALID_RESPONSE
+      value:
+        id: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+        version: 3
+        status: TECHNICAL_HOLD
+        product:
+          code: WORKING_CAPITAL
+          name: Оборотный кредит
+          description: Закупка товаров, сырья и финансирование текущих расходов бизнеса.
+          terms:
+            version: demo-working-capital-1
+            currency: RUB
+            minAmount: '100000.00'
+            maxAmount: '2000000.00'
+            minTermMonths: 3
+            maxTermMonths: 18
+            annualRatePercent: '20.00'
+            minBusinessAgeMonths: 12
+            disbursementDescription: Получение одной суммой.
+            repaymentDescription: Возврат по согласованному демонстрационному графику.
+        reportingPeriod:
+          startDate: '2025-10-01'
+          endDate: '2026-09-30'
+          months: 12
+        form:
+          amount: '500000.00'
+          termMonths: 12
+          averageMonthlyInflow: '1200000.00'
+          averageMonthlyOutflow: '800000.00'
+          equipment: null
+        assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+        lastSubmittedAt: '2026-10-22T10:02:00Z'
+        decision: null
+        requiredInformation: []
+        processingError:
+          code: CREDIT_HISTORY_INVALID_RESPONSE
+          message: Не удалось проверить кредитный профиль. Данные сохранены, можно повторить.
           occurredAt: '2026-10-22T10:02:01Z'
         allowedActions:
         - RETRY
