@@ -2,10 +2,12 @@ openapi: 3.1.1
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Credit Cabinet — Backend API
-  version: 0.1.0
-  description: 'Контракт фронтенда с Java. Все примеры синтетические; условия и порог решения не
-    утверждены. Общие правила и список допущений: README.md. Сессия cookie, без JWT. Все изменяющие запросы защищены
-    CSRF. Требования полей при сохранении и отправке различаются.'
+  version: 0.2.0
+  description: 'Контракт фронтенда с Java. Все примеры синтетические; демонстрационные условия и правила
+    заданы в ../CREDIT_POLICY_AND_ML_REQUIREMENTS.md; численный порог ещё не выбран. Общие правила: README.md.
+    Сессия cookie, без JWT. Все изменяющие запросы защищены
+    CSRF. Требования полей при сохранении и отправке различаются. Версия 0.2.0 добавляет идентифицированные
+    вопросы requiredInformation и clarificationResponses в submit для подтверждения или исправления данных.'
 servers:
 - url: /api/v1
   description: Один origin через frontend proxy / общий reverse proxy.
@@ -388,7 +390,9 @@ paths:
                 averageMonthlyOutflow: '800000.00'
                 equipment: null
       description: Только DRAFT и NEEDS_INFO. Все ключи form обязательны; null очищает поле. В NEEDS_INFO изменяются
-        только запрошенные поля; остальные передаются без изменений. Продукт неизменяем. При конфликте версии — 409
+        только запрошенные поля; остальные передаются без изменений. Сохранение не разрешает вопрос и не запускает
+        рассмотрение. Для продолжения нужен submit с clarificationResponses. Исходный вопрос и его clarificationId
+        остаются доступны после исправления поля. Продукт неизменяем. При конфликте версии — 409
         VERSION_CONFLICT, при запрещённом состоянии — 409 INVALID_APPLICATION_STATE. Некорректное сохранение не применяется
         частично. Автосохранение фронт выполняет последовательно; перед submit дожидается последнего успешного сохранения.
         Потерянный ответ PUT проверяется чтением заявки, не слепым повтором с новым содержимым.
@@ -475,11 +479,41 @@ paths:
           application/json:
             schema:
               $ref: '#/components/schemas/SubmitRequest'
-            example:
-              expectedVersion: 1
-              expectedProductTermsVersion: demo-working-capital-1
-      description: DRAFT или NEEDS_INFO. Проверяет полноту сохранённой формы. Новый набор данных не принимает. Создаёт
-        снимок, assessmentId, CHECKING и задание одной транзакцией. Изменившиеся условия — 409 PRODUCT_TERMS_CHANGED
+            examples:
+              initial:
+                summary: Первая отправка сохранённой формы
+                value:
+                  expectedVersion: 1
+                  expectedProductTermsVersion: demo-working-capital-1
+                  clarificationResponses: []
+              confirmZeroInflow:
+                summary: NEEDS_INFO — подтверждение неизменного нуля без редактирования формы
+                value:
+                  expectedVersion: 3
+                  expectedProductTermsVersion: demo-equipment-1
+                  clarificationResponses:
+                  - clarificationId: 1f9bd36f-e62b-47cd-a8c3-fc3227fc6893
+                    response: CONFIRM_VALUE
+                    comment: За указанный период поступлений от деятельности не было.
+              correctZeroInflow:
+                summary: NEEDS_INFO — после сохранения положительных поступлений версия стала 4
+                value:
+                  expectedVersion: 4
+                  expectedProductTermsVersion: demo-equipment-1
+                  clarificationResponses:
+                  - clarificationId: 1f9bd36f-e62b-47cd-a8c3-fc3227fc6893
+                    response: VALUE_CORRECTED
+      description: DRAFT или NEEDS_INFO. Проверяет полноту сохранённой формы; form в теле не принимает. В DRAFT
+        clarificationResponses отсутствует или пуст. В NEEDS_INFO обязательны ответы ровно на все текущие вопросы,
+        без повторяющихся clarificationId. Для ZERO_INFLOW_CONFIRMATION ответ CONFIRM_VALUE допустим только при
+        сохранённом 0.00; VALUE_CORRECTED — после сохранения положительного значения. Комментарий необязателен и
+        не заменяет ответ. Отсутствующий ответ — 422 CLARIFICATION_RESPONSE_REQUIRED; противоречие с формой — 422
+        CLARIFICATION_RESPONSE_CONFLICT; ответы в DRAFT — 422 CLARIFICATION_NOT_EXPECTED; устаревший или посторонний
+        идентификатор — 409 CLARIFICATION_STALE. Проверки выполняются после доступа и поиска успешного повтора ключа.
+        Ответы, их связь с вопросами, снимок, новый assessmentId, CHECKING и задание сохраняются одной транзакцией.
+        Подтверждение привязано к полю, исходному значению и периоду; при неизменных данных повторный вопрос не создаётся,
+        в том числе при техническом retry. Изменение значения делает прежнее подтверждение неприменимым.
+        Изменившиеся условия — 409 PRODUCT_TERMS_CHANGED
         с currentProductTermsVersion; фронт показывает их до новой отправки. Повтор ключа возвращает тот же assessmentId
         и исходное 202-подтверждение, даже если рассмотрение завершено. Для актуального состояния читать GET. Другой
         ключ при активной проверке — 409 APPLICATION_ALREADY_SUBMITTED.
@@ -497,14 +531,37 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/ProcessingAccepted'
-              example:
-                applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
-                assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
-                status: CHECKING
-                version: 2
-                acceptedAt: '2026-10-22T10:02:00Z'
-                statusUrl: /api/v1/applications/7be0c0bf-9019-47e0-a6b1-67548f1038f2
-                pollAfterSeconds: 2
+              examples:
+                initial:
+                  summary: Принята первая отправка
+                  value:
+                    applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                    assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+                    status: CHECKING
+                    version: 2
+                    acceptedAt: '2026-10-22T10:02:00Z'
+                    statusUrl: /api/v1/applications/7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                    pollAfterSeconds: 2
+                confirmZeroInflow:
+                  summary: Принято подтверждение; создана новая попытка
+                  value:
+                    applicationId: fd1a6bcf-37a6-4559-9b94-1a502eb6cce8
+                    assessmentId: caf0e42a-36ca-4ed9-9ef9-5f318d86f625
+                    status: CHECKING
+                    version: 4
+                    acceptedAt: '2026-10-22T10:03:00Z'
+                    statusUrl: /api/v1/applications/fd1a6bcf-37a6-4559-9b94-1a502eb6cce8
+                    pollAfterSeconds: 2
+                correctZeroInflow:
+                  summary: Принято исправление после сохранения формы версии 4
+                  value:
+                    applicationId: fd1a6bcf-37a6-4559-9b94-1a502eb6cce8
+                    assessmentId: 0ea91e53-a10a-4d4b-835f-f6d3676b4576
+                    status: CHECKING
+                    version: 5
+                    acceptedAt: '2026-10-22T10:04:00Z'
+                    statusUrl: /api/v1/applications/fd1a6bcf-37a6-4559-9b94-1a502eb6cce8
+                    pollAfterSeconds: 2
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
@@ -1377,9 +1434,74 @@ components:
           minLength: 1
           maxLength: 64
           pattern: '[\s\S]*\S[\s\S]*'
+        clarificationResponses:
+          type: array
+          items:
+            $ref: '#/components/schemas/ClarificationResponse'
+          maxItems: 30
+          uniqueItems: true
+          default: []
+          description: В DRAFT отсутствует или пуст. В NEEDS_INFO ответы на все текущие вопросы; уникальность
+            clarificationId, принадлежность вопроса и соответствие ответа форме дополнительно проверяет Java.
       required:
       - expectedVersion
       - expectedProductTermsVersion
+    ClarificationRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        clarificationId:
+          type: string
+          format: uuid
+        field:
+          type: string
+          const: form.averageMonthlyInflow
+        code:
+          type: string
+          const: ZERO_INFLOW_CONFIRMATION
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+        observedValue:
+          type: string
+          const: '0.00'
+      required:
+      - clarificationId
+      - field
+      - code
+      - message
+      - observedValue
+      description: В MVP вопрос о нулевых поступлениях, сформированный Java до вызова ML. Идентификатор связан
+        с заявкой, исходной попыткой, полем, значением и reportingPeriod заявки. Сохраняется до принятия ответа,
+        включая редактирование запрошенного поля. observedValue не меняется вслед за form. Код нового типа
+        уточнения требует расширения схемы и согласования поведения клиентов.
+    ClarificationResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        clarificationId:
+          type: string
+          format: uuid
+        response:
+          type: string
+          enum:
+          - CONFIRM_VALUE
+          - VALUE_CORRECTED
+        comment:
+          anyOf:
+          - type: string
+            minLength: 1
+            maxLength: 1000
+            pattern: '[\s\S]*\S[\s\S]*'
+          - type: 'null'
+      required:
+      - clarificationId
+      - response
+      description: CONFIRM_VALUE подтверждает исходный ноль без изменения сохранённого поля; VALUE_CORRECTED
+        сообщает, что поле уже сохранено с положительным значением. Комментарий необязателен, допускается null;
+        не заменяет ответ, не меняет анкету и не передаётся в признаки ML.
     RetryRequest:
       type: object
       additionalProperties: false
@@ -1775,7 +1897,7 @@ components:
         requiredInformation:
           type: array
           items:
-            $ref: '#/components/schemas/FieldIssue'
+            $ref: '#/components/schemas/ClarificationRequest'
           maxItems: 30
         processingError:
           anyOf:
@@ -2126,7 +2248,7 @@ components:
         createdAt: '2026-10-22T10:00:00Z'
         updatedAt: '2026-10-22T10:02:00Z'
     ApplicationNeedsInfo:
-      summary: NEEDS_INFO
+      summary: NEEDS_INFO — нулевые поступления требуют подтверждения либо исправления
       value:
         id: fd1a6bcf-37a6-4559-9b94-1a502eb6cce8
         version: 3
@@ -2153,7 +2275,7 @@ components:
         form:
           amount: '500000.00'
           termMonths: 12
-          averageMonthlyInflow: '1200000.00'
+          averageMonthlyInflow: '0.00'
           averageMonthlyOutflow: '800000.00'
           equipment:
             name: Оборудование
@@ -2162,9 +2284,11 @@ components:
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
         requiredInformation:
-        - field: form.equipment.name
-          code: PURCHASE_DESCRIPTION_REQUIRED
-          message: Уточните, какое оборудование планируется приобрести.
+        - clarificationId: 1f9bd36f-e62b-47cd-a8c3-fc3227fc6893
+          field: form.averageMonthlyInflow
+          code: ZERO_INFLOW_CONFIRMATION
+          message: Подтвердите, что среднемесячные поступления за указанный отчётный период равны нулю, либо исправьте значение.
+          observedValue: '0.00'
         processingError: null
         allowedActions:
         - UPDATE_FORM
