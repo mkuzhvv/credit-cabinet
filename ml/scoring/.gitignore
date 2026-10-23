@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+data/*.csv
+artifacts/*.cbm
+artifacts/*.joblib
+artifacts/*_predictions.csv

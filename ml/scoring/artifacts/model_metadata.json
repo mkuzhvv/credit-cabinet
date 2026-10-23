@@ -1,0 +1,38 @@
+{
+  "model": "CatBoostClassifier + sigmoid calibration",
+  "data_origin": "fully_synthetic",
+  "seed": 42,
+  "features": [
+    "product_id",
+    "business_age_months",
+    "monthly_revenue_rub",
+    "monthly_expenses_rub",
+    "existing_monthly_payments_rub",
+    "cash_balance_rub",
+    "inflow_mean_3m_rub",
+    "revenue_volatility",
+    "revenue_change_6m",
+    "late_payment_days_12m",
+    "requested_amount_rub",
+    "requested_term_months",
+    "operating_margin",
+    "cash_buffer_months",
+    "amount_to_revenue",
+    "planning_burden_to_revenue"
+  ],
+  "catalog_sha256": "e06d8303bb64da5aa4370f75c1a034506cc73ad70cd0fe2f0b3c8dc3aeb10a0b",
+  "python": "3.12.14",
+  "packages": {
+    "catboost": "1.2.8",
+    "scikit-learn": "1.7.2",
+    "pandas": "2.3.3",
+    "numpy": "2.5.4",
+    "joblib": "1.6.0"
+  },
+  "target_definition": "Случайное событие невозврата в течение min(срок займа или транша, 12) месяцев; у овердрафта 1 месяц означает 30 дней.",
+  "policy": {
+    "approve_max_risk": 0.15,
+    "decline_min_risk": 0.45,
+    "origin": "Условные пороги автора для прототипа; не банковские и не оптимизированы по реальным убыткам."
+  }
+}
