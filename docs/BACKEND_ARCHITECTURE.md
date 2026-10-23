@@ -27,23 +27,23 @@ flowchart LR
 | Задача | Инструмент |
 |---|---|
 | Язык | Java 21 LTS |
-| Приложение и REST API | Spring Boot 4.1.x, Spring MVC |
-| Сборка | Maven, Maven Wrapper |
+| Приложение и REST API | Spring Boot 4.1.2, Spring MVC |
+| Сборка | Maven 3.9.16, Maven Wrapper |
 | База данных | PostgreSQL 18 |
 | Доступ к данным | Spring Data JPA, Hibernate |
 | Миграции | Flyway, SQL-миграции; Hibernate `ddl-auto=validate` |
 | Валидация DTO | Jakarta Bean Validation |
 | Пользователь и сессия | Spring Security, HTTP-сессия, cookie |
-| LLM | Spring AI 2.0.x, Ollama |
+| LLM | Spring AI 2.0.2, Ollama |
 | HTTP-клиент скоринга | Spring `RestClient` |
-| Документация API | springdoc-openapi, Swagger UI |
+| Документация API | springdoc-openapi 3.1.1, Swagger UI |
 | Ошибки API | `ProblemDetail`, коды ошибок, ошибки полей |
 | Диагностика | SLF4J, Logback, Actuator |
 | Тестирование | JUnit Jupiter, AssertJ, Mockito, Testcontainers с PostgreSQL |
 | Общий запуск | Docker, Docker Compose |
 | CI | GitHub Actions: сборка и тесты |
 
-Точные patch-версии, BOM и Docker-образы закрепляем при создании проекта после проверки совместимости. Версии Hibernate и JUnit согласуем с Spring Boot.
+Версии закреплены в [pom.xml](../backend/pom.xml). Hibernate, JUnit и Testcontainers управляются Spring Boot; Spring AI — отдельным BOM.
 
 ### По необходимости
 
@@ -92,7 +92,9 @@ creditcabinet/
     └── error/
 ```
 
-В `identity` и `catalog` используем такие же подпакеты по мере необходимости. Пустые уровни и отдельные Maven-модули не создаём. Миграции находятся в `backend/src/main/resources/db/migration/`.
+Корневой Java-пакет и Maven groupId — `com.creditcabinet`. Стартовая структура создана в [backend/src/main/java/com/creditcabinet/](../backend/src/main/java/com/creditcabinet/). Назначение подпакетов закреплено в `package-info.java`; бизнес-классы добавляются при реализации сценариев. Отдельные Maven-модули не создаются. Миграции находятся в `backend/src/main/resources/db/migration/`.
+
+На этапе каркаса добавлены только стартовый класс, структура пакетов, Maven Wrapper и зависимости. `application.yaml` содержит имя приложения. Описанные ниже настройки, классы, миграции и тесты относятся к дальнейшей реализации.
 
 ## 4. Правила разработки
 
@@ -179,4 +181,4 @@ creditcabinet/
 - В логах есть идентификаторы запроса, заявки и попытки. Полную анкету, переписку, секреты и сессию в обычные логи не пишем.
 - Проверяем правила на границах, доступ к чужой заявке, повторы, конкуренцию, сбои моделей и восстановление после перезапуска.
 
-Форматы API определены в [контрактах](contracts/README.md), правила решения и уточнений — в [кредитной политике](CREDIT_POLICY_AND_ML_REQUIREMENTS.md). Физическая схема БД проектируется отдельно по этим требованиям и [сценариям](BACKEND_SCENARIOS.md).
+Форматы API определены в [контрактах](contracts/README.md), правила решения и уточнений — в [кредитной политике](CREDIT_POLICY_AND_ML_REQUIREMENTS.md), таблицы и транзакции — в [схеме БД](DATABASE_SCHEMA.md). В упрощённой схеме текущие условия находятся в продукте, исторические — в снимке попытки; сама попытка хранит сведения о её фоновой обработке. Отдельные таблицы условий и заданий не создаются.
