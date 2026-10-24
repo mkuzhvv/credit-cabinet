@@ -1,0 +1,37 @@
+{
+  "assessmentId": "faef1799-2a90-5d43-97ae-3842eebd345c",
+  "applicationId": "61d25ecc-4fe3-5cff-bc35-106d16b43c94",
+  "featureSchemaVersion": "4",
+  "features": {
+    "productCode": "REVOLVING_LINE",
+    "currency": "RUB",
+    "amount": "500000.00",
+    "termMonths": 24,
+    "averageMonthlyInflow": "1200000.00",
+    "averageMonthlyOutflow": "800000.00",
+    "reportingPeriod": {
+      "startDate": "2026-04-01",
+      "endDate": "2026-09-30",
+      "months": 6
+    },
+    "asOfDate": "2026-10-22",
+    "businessAgeMonths": 86,
+    "creditHistory": {
+      "status": "AVAILABLE",
+      "asOfDate": "2026-10-22",
+      "delinquencyPeriod": {
+        "startDate": "2025-10-01",
+        "endDate": "2026-09-30",
+        "months": 12
+      },
+      "totalOutstandingDebt": "350000.00",
+      "monthlyDebtPayment": "20000.00",
+      "overdueDebtAmount": "0.00",
+      "maxDaysPastDueLast12Months": 0
+    },
+    "projectBudget": null,
+    "trancheTermMonths": 3,
+    "governmentContract": null,
+    "cashBalance": "1000000.00"
+  }
+}
