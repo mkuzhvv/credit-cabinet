@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+*.log
+
+# Local verification and experiments; not required by the service
+/tests/
+/VERIFICATION.md
+/reports/
+/profiles/
+/evaluation/
+
+# Former ML pipeline outputs; the rules engine does not use these
+/data/
+/artifacts/
+/models/

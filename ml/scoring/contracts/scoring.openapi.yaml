@@ -1,0 +1,985 @@
+openapi: 3.1.1
+jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
+info:
+  title: Credit Cabinet — Rule-based Scoring API
+  version: 0.4.0
+  description: 'Java ↔ Python: формальные правила денежных потоков, без ML и обучения. Схема 4 добавляет обязательный
+    cashBalance. riskScore — совместимый бинарный индекс: 0 правила пройдены, 1 не пройдены; это не вероятность
+    дефолта. Java применяет cutoff 0.5 и проверяет ожидаемую modelVersion.'
+servers:
+- url: http://scoring:8000
+  description: Внутренняя Docker-сеть; порт не публикуется браузеру.
+- url: http://localhost:8000
+  description: Локальная разработка.
+security: []
+paths:
+  /health/live:
+    get:
+      operationId: getScoringLiveness
+      summary: Проверить процесс
+      responses:
+        '200':
+          description: Процесс работает; правила могут быть ещё не готовы.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LiveView'
+              example:
+                status: UP
+  /health/ready:
+    get:
+      operationId: getScoringReadiness
+      summary: Проверить готовность правил
+      responses:
+        '200':
+          description: Правила, контракт и каталог загружены.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadyView'
+              example:
+                status: READY
+                modelVersion: rules-cashflow-v1-<fingerprint>
+                featureSchemaVersion: '4'
+                supportedProductCodes:
+                - WORKING_CAPITAL
+                - OVERDRAFT
+                - REVOLVING_LINE
+                - LONG_TERM
+                - GOVERNMENT_CONTRACT_LINE
+        '503':
+          $ref: '#/components/responses/NotReady'
+  /internal/v1/assessments:
+    post:
+      operationId: assessCreditRisk
+      summary: Проверить заявку по формальной денежной политике
+      description: Бюджет HTTP-вызова 10 секунд. Движок читает правила до readiness и не обучается. Повтор одинакового
+        запроса безопасен и детерминирован. Формат/условия продукта проверяются до расчёта. Результат 0/1 — индекс
+        правил, не вероятность; Java применяет cutoff 0.5, проверяет версии и сохраняет решение. applicationId —
+        корреляция, не доступ к БД.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScoringRequest'
+            examples:
+              working_capital:
+                value:
+                  assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+                  applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: WORKING_CAPITAL
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 12
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2026-04-01'
+                      endDate: '2026-09-30'
+                      months: 6
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: AVAILABLE
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: '350000.00'
+                      monthlyDebtPayment: '20000.00'
+                      overdueDebtAmount: '0.00'
+                      maxDaysPastDueLast12Months: 0
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract: null
+                    cashBalance: '1000000.00'
+              overdraft:
+                value:
+                  assessmentId: 71b03990-acdb-5ee6-9f50-31aca81edaf5
+                  applicationId: 18058978-e887-5c5c-acb6-0c4589b9d9a0
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: OVERDRAFT
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 12
+                    averageMonthlyInflow: '2000000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2026-07-01'
+                      endDate: '2026-09-30'
+                      months: 3
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: AVAILABLE
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: '350000.00'
+                      monthlyDebtPayment: '20000.00'
+                      overdueDebtAmount: '0.00'
+                      maxDaysPastDueLast12Months: 0
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract: null
+                    cashBalance: '1000000.00'
+              revolving_line:
+                value:
+                  assessmentId: faef1799-2a90-5d43-97ae-3842eebd345c
+                  applicationId: 61d25ecc-4fe3-5cff-bc35-106d16b43c94
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: REVOLVING_LINE
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 24
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2026-04-01'
+                      endDate: '2026-09-30'
+                      months: 6
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: AVAILABLE
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: '350000.00'
+                      monthlyDebtPayment: '20000.00'
+                      overdueDebtAmount: '0.00'
+                      maxDaysPastDueLast12Months: 0
+                    projectBudget: null
+                    trancheTermMonths: 3
+                    governmentContract: null
+                    cashBalance: '1000000.00'
+              long_term:
+                value:
+                  assessmentId: fc2a5caf-3d1a-52de-8609-dc68ad5ac32c
+                  applicationId: ab47a197-f74d-509f-99c5-2d83597cd6b3
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: LONG_TERM
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 24
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2025-10-01'
+                      endDate: '2026-09-30'
+                      months: 12
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: AVAILABLE
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: '350000.00'
+                      monthlyDebtPayment: '20000.00'
+                      overdueDebtAmount: '0.00'
+                      maxDaysPastDueLast12Months: 0
+                    projectBudget: '600000.00'
+                    trancheTermMonths: null
+                    governmentContract: null
+                    cashBalance: '1000000.00'
+              government_contract_line:
+                value:
+                  assessmentId: e302092b-3631-569e-8a7e-dca39710f480
+                  applicationId: 08ad82b7-7c1c-5ed9-828e-8e21ac02ac32
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: GOVERNMENT_CONTRACT_LINE
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 6
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2025-10-01'
+                      endDate: '2026-09-30'
+                      months: 12
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: AVAILABLE
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: '350000.00'
+                      monthlyDebtPayment: '20000.00'
+                      overdueDebtAmount: '0.00'
+                      maxDaysPastDueLast12Months: 0
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract:
+                      contractAmount: '2000000.00'
+                      advanceAmount: '200000.00'
+                      executionEndDate: '2027-04-15'
+                      finalPaymentDate: '2027-04-30'
+                      plannedEndDate: '2027-04-22'
+                    cashBalance: '1000000.00'
+              no_history:
+                value:
+                  assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+                  applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: WORKING_CAPITAL
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 12
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2026-04-01'
+                      endDate: '2026-09-30'
+                      months: 6
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: NO_HISTORY
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: null
+                      monthlyDebtPayment: null
+                      overdueDebtAmount: null
+                      maxDaysPastDueLast12Months: null
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract: null
+                    cashBalance: '1000000.00'
+              past_delinquency:
+                value:
+                  assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+                  applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: WORKING_CAPITAL
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 12
+                    averageMonthlyInflow: '1200000.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2026-04-01'
+                      endDate: '2026-09-30'
+                      months: 6
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: AVAILABLE
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: '350000.00'
+                      monthlyDebtPayment: '20000.00'
+                      overdueDebtAmount: '0.00'
+                      maxDaysPastDueLast12Months: 45
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract: null
+                    cashBalance: '1000000.00'
+              confirmed_zero_inflow:
+                value:
+                  assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+                  applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
+                  featureSchemaVersion: '4'
+                  features:
+                    productCode: WORKING_CAPITAL
+                    currency: RUB
+                    amount: '500000.00'
+                    termMonths: 12
+                    averageMonthlyInflow: '0.00'
+                    averageMonthlyOutflow: '800000.00'
+                    reportingPeriod:
+                      startDate: '2026-04-01'
+                      endDate: '2026-09-30'
+                      months: 6
+                    asOfDate: '2026-10-22'
+                    businessAgeMonths: 86
+                    creditHistory:
+                      status: AVAILABLE
+                      asOfDate: '2026-10-22'
+                      delinquencyPeriod:
+                        startDate: '2025-10-01'
+                        endDate: '2026-09-30'
+                        months: 12
+                      totalOutstandingDebt: '350000.00'
+                      monthlyDebtPayment: '20000.00'
+                      overdueDebtAmount: '0.00'
+                      maxDaysPastDueLast12Months: 0
+                    projectBudget: null
+                    trancheTermMonths: null
+                    governmentContract: null
+                    cashBalance: '1000000.00'
+      responses:
+        '200':
+          description: Оценка получена; низкий или высокий риск не меняет HTTP-статус.
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/RequestId'
+            Cache-Control:
+              $ref: '#/components/headers/NoStore'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringResponse'
+              example:
+                assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
+                featureSchemaVersion: '4'
+                modelVersion: rules-cashflow-v1-<fingerprint>
+                riskScore: 0.0
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '422':
+          $ref: '#/components/responses/InvalidFeatures'
+        '500':
+          $ref: '#/components/responses/InferenceFailed'
+        '503':
+          $ref: '#/components/responses/NotReady'
+components:
+  headers:
+    RequestId:
+      description: Идентификатор запроса для диагностики.
+      schema:
+        type: string
+        format: uuid
+    NoStore:
+      description: Ответ не кэшируется.
+      schema:
+        type: string
+        const: no-store
+  schemas:
+    Money:
+      type: string
+      minLength: 4
+      maxLength: 15
+      pattern: ^(0|[1-9][0-9]{0,11})\.[0-9]{2}$
+      description: Неотрицательная сумма в рублях, ровно две цифры после точки. Java BigDecimal / Python Decimal.
+        Это технический диапазон, не лимит продукта.
+    PositiveMoney:
+      type: string
+      minLength: 4
+      maxLength: 15
+      pattern: ^(0|[1-9][0-9]{0,11})\.[0-9]{2}$
+      description: Положительная сумма в RUB, ровно две цифры после точки.
+      not:
+        const: '0.00'
+    ProductCode:
+      type: string
+      minLength: 2
+      maxLength: 64
+      pattern: ^[A-Z][A-Z0-9_]{1,63}$
+      description: 'Стабильный код из каталога. MVP: WORKING_CAPITAL, OVERDRAFT, REVOLVING_LINE, LONG_TERM, GOVERNMENT_CONTRACT_LINE.
+        Список не зашит в enum; новый код требует явной поддержки формы, политики и движка правил.'
+    FieldCode:
+      type: string
+      minLength: 1
+      maxLength: 120
+      pattern: ^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)*$
+      description: Путь поля, например form.amount или form.financingPurpose.
+    Version:
+      type: integer
+      minimum: 0
+      format: int64
+      maximum: 9007199254740991
+      description: Версия заявки. Меняется при изменении данных или состояния; безопасна для JavaScript Number.
+    ReportingPeriod:
+      type: object
+      additionalProperties: false
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        months:
+          type: integer
+          enum:
+          - 3
+          - 6
+          - 12
+      required:
+      - startDate
+      - endDate
+      - months
+      description: 'Полные календарные месяцы до месяца calculationDate черновика; границы включительно. Число месяцев
+        определяет продукт: OVERDRAFT=3, WORKING_CAPITAL/REVOLVING_LINE=6, LONG_TERM/GOVERNMENT_CONTRACT_LINE=12.
+        Период фиксируется сервером и не сдвигается при submit/retry.'
+    FieldIssue:
+      type: object
+      additionalProperties: false
+      properties:
+        field:
+          $ref: '#/components/schemas/FieldCode'
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[A-Z][A-Z0-9_]*$
+        message:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          pattern: '[\s\S]*\S[\s\S]*'
+      required:
+      - field
+      - code
+      - message
+    Problem:
+      type: object
+      additionalProperties: true
+      required:
+      - type
+      - title
+      - status
+      - code
+      - requestId
+      properties:
+        type:
+          type: string
+          format: uri-reference
+        title:
+          type: string
+          minLength: 1
+          maxLength: 200
+          pattern: '[\s\S]*\S[\s\S]*'
+        status:
+          type: integer
+          minimum: 400
+          maximum: 599
+        detail:
+          type: string
+          minLength: 1
+          maxLength: 2000
+          pattern: '[\s\S]*\S[\s\S]*'
+        instance:
+          type: string
+          format: uri-reference
+        code:
+          type: string
+          minLength: 1
+          maxLength: 80
+          pattern: ^[A-Z][A-Z0-9_]*$
+        requestId:
+          type: string
+          format: uuid
+        errors:
+          type: array
+          items:
+            $ref: '#/components/schemas/FieldIssue'
+          maxItems: 30
+        currentVersion:
+          $ref: '#/components/schemas/Version'
+        currentProductTermsVersion:
+          type: string
+          minLength: 1
+          maxLength: 64
+          pattern: '[\s\S]*\S[\s\S]*'
+      description: RFC 9457 application/problem+json. code используется программно; message/title — для человека.
+        Неизвестные расширения ответа клиент игнорирует. Стек, финансовые данные и секреты сюда не включаются.
+    CreditHistoryPeriod:
+      type: object
+      additionalProperties: false
+      properties:
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        months:
+          type: integer
+          const: 12
+      required:
+      - startDate
+      - endDate
+      - months
+      description: 12 полных календарных месяцев перед месяцем creditHistory.asOfDate; границы включительно. Период
+        не обязан совпадать с reportingPeriod анкеты. Соответствие календарных границ проверяют Java и Python.
+    CreditHistory:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          enum:
+          - AVAILABLE
+          - NO_HISTORY
+        asOfDate:
+          type: string
+          format: date
+          description: Дата состояния обязательств в отчёте; фиксируется источником и не сдвигается при retry.
+        delinquencyPeriod:
+          $ref: '#/components/schemas/CreditHistoryPeriod'
+        totalOutstandingDebt:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+          description: Остаток задолженности по кредитным обязательствам в отчёте на asOfDate, включая просроченную
+            часть.
+        monthlyDebtPayment:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+          description: Сумма ежемесячных платежей по действующим кредитным обязательствам в отчёте на asOfDate.
+            Это не дополнительный расход к averageMonthlyOutflow; существующие обязательства уже входят в расходы.
+        overdueDebtAmount:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+          description: Просроченная часть totalOutstandingDebt на asOfDate; не больше общей задолженности.
+        maxDaysPastDueLast12Months:
+          type:
+          - integer
+          - 'null'
+          minimum: 0
+          description: Максимальное число полных дней просрочки, наблюдавшееся в delinquencyPeriod. Длительная просрочка
+            может начаться до этого периода. При отсутствии просрочек в полной истории — 0.
+      required:
+      - status
+      - asOfDate
+      - delinquencyPeriod
+      - totalOutstandingDebt
+      - monthlyDebtPayment
+      - overdueDebtAmount
+      - maxDaysPastDueLast12Months
+      allOf:
+      - if:
+          properties:
+            status:
+              const: AVAILABLE
+          required:
+          - status
+        then:
+          properties:
+            totalOutstandingDebt:
+              $ref: '#/components/schemas/Money'
+            monthlyDebtPayment:
+              $ref: '#/components/schemas/Money'
+            overdueDebtAmount:
+              $ref: '#/components/schemas/Money'
+            maxDaysPastDueLast12Months:
+              type: integer
+              minimum: 0
+      - if:
+          properties:
+            status:
+              const: NO_HISTORY
+          required:
+          - status
+        then:
+          properties:
+            totalOutstandingDebt:
+              type: 'null'
+            monthlyDebtPayment:
+              type: 'null'
+            overdueDebtAmount:
+              type: 'null'
+            maxDaysPastDueLast12Months:
+              type: 'null'
+      description: Проверка успешно завершена. AVAILABLE означает наличие полных согласованных сведений за период,
+        а не положительную историю. NO_HISTORY означает отсутствие записей; все четыре показателя равны null, статус
+        сохраняется отдельно и не подменяется хорошей историей или автоматическим одобрением. Правило текущей просрочки не нарушено; денежные ограничения остаются обязательными. При недоступности,
+        неполном или некорректном отчёте Java не вызывает скоринг. Проверку принадлежности компании, источника и
+        даты получения выполняет Java; их технические метаданные не входят в формулу.
+    ScoringFeatures:
+      type: object
+      additionalProperties: false
+      properties:
+        productCode:
+          $ref: '#/components/schemas/ProductCode'
+        currency:
+          type: string
+          const: RUB
+        amount:
+          $ref: '#/components/schemas/PositiveMoney'
+        termMonths:
+          type: integer
+          minimum: 1
+          maximum: 600
+        averageMonthlyInflow:
+          $ref: '#/components/schemas/Money'
+        averageMonthlyOutflow:
+          $ref: '#/components/schemas/Money'
+        reportingPeriod:
+          $ref: '#/components/schemas/ReportingPeriod'
+        asOfDate:
+          type: string
+          format: date
+          description: UTC-дата принятия исходной попытки submit, по ней рассчитывают возраст бизнеса и plannedEndDate.
+            При техническом retry сохраняется. Не обязана совпадать с calculationDate черновика или датой кредитного
+            отчёта; reportingPeriod закреплён при создании черновика отдельно.
+        businessAgeMonths:
+          type: integer
+          minimum: 0
+        creditHistory:
+          $ref: '#/components/schemas/CreditHistory'
+        projectBudget:
+          anyOf:
+          - $ref: '#/components/schemas/PositiveMoney'
+          - type: 'null'
+        trancheTermMonths:
+          anyOf:
+          - type: integer
+            minimum: 3
+            maximum: 6
+          - type: 'null'
+        governmentContract:
+          anyOf:
+          - $ref: '#/components/schemas/GovernmentContractFeatures'
+          - type: 'null'
+        cashBalance:
+          $ref: '#/components/schemas/Money'
+          description: Подтверждённый свободный денежный остаток до нового финансирования. Не включает сумму нового
+            кредита, заложенные или недоступные деньги; неизвестный остаток нельзя заменять нулём.
+      required:
+      - productCode
+      - currency
+      - amount
+      - termMonths
+      - averageMonthlyInflow
+      - averageMonthlyOutflow
+      - reportingPeriod
+      - asOfDate
+      - businessAgeMonths
+      - creditHistory
+      - projectBudget
+      - trancheTermMonths
+      - governmentContract
+      - cashBalance
+      allOf:
+      - if:
+          properties:
+            productCode:
+              const: WORKING_CAPITAL
+          required:
+          - productCode
+        then:
+          properties:
+            reportingPeriod:
+              properties:
+                months:
+                  const: 6
+            projectBudget:
+              type: 'null'
+            trancheTermMonths:
+              type: 'null'
+            governmentContract:
+              type: 'null'
+            termMonths:
+              type: integer
+              minimum: 3
+              maximum: 12
+      - if:
+          properties:
+            productCode:
+              const: OVERDRAFT
+          required:
+          - productCode
+        then:
+          properties:
+            reportingPeriod:
+              properties:
+                months:
+                  const: 3
+            projectBudget:
+              type: 'null'
+            trancheTermMonths:
+              type: 'null'
+            governmentContract:
+              type: 'null'
+            termMonths:
+              type: integer
+              minimum: 12
+              maximum: 12
+      - if:
+          properties:
+            productCode:
+              const: REVOLVING_LINE
+          required:
+          - productCode
+        then:
+          properties:
+            reportingPeriod:
+              properties:
+                months:
+                  const: 6
+            projectBudget:
+              type: 'null'
+            trancheTermMonths:
+              type: integer
+              minimum: 3
+              maximum: 6
+            governmentContract:
+              type: 'null'
+            termMonths:
+              type: integer
+              minimum: 24
+              maximum: 24
+      - if:
+          properties:
+            productCode:
+              const: LONG_TERM
+          required:
+          - productCode
+        then:
+          properties:
+            reportingPeriod:
+              properties:
+                months:
+                  const: 12
+            projectBudget:
+              $ref: '#/components/schemas/PositiveMoney'
+            trancheTermMonths:
+              type: 'null'
+            governmentContract:
+              type: 'null'
+            termMonths:
+              type: integer
+              minimum: 24
+              maximum: 60
+      - if:
+          properties:
+            productCode:
+              const: GOVERNMENT_CONTRACT_LINE
+          required:
+          - productCode
+        then:
+          properties:
+            reportingPeriod:
+              properties:
+                months:
+                  const: 12
+            projectBudget:
+              type: 'null'
+            trancheTermMonths:
+              type: 'null'
+            governmentContract:
+              $ref: '#/components/schemas/GovernmentContractFeatures'
+            termMonths:
+              type: integer
+              minimum: 1
+              maximum: 12
+      description: 'Схема 4: все поля схемы 3 и обязательный cashBalance. averageMonthlyOutflow уже включает действующие
+        долговые платежи; второй раз они не вычитаются. Текущую просрочку проверяют Java и движок правил. NO_HISTORY
+        не заменяется фиктивными суммами. Обязательные банковские проверки, которых нет во входе, выполняет Java.'
+    ScoringRequest:
+      type: object
+      additionalProperties: false
+      properties:
+        assessmentId:
+          type: string
+          format: uuid
+        applicationId:
+          type: string
+          format: uuid
+        featureSchemaVersion:
+          type: string
+          const: '4'
+        features:
+          $ref: '#/components/schemas/ScoringFeatures'
+      required:
+      - assessmentId
+      - applicationId
+      - featureSchemaVersion
+      - features
+    ScoringResponse:
+      type: object
+      additionalProperties: false
+      properties:
+        assessmentId:
+          type: string
+          format: uuid
+        featureSchemaVersion:
+          type: string
+          const: '4'
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '[\s\S]*\S[\s\S]*'
+          description: Версия алгоритма, контракта, каталога и параметров. Имя поля сохранено для совместимости;
+            обученной модели нет.
+        riskScore:
+          type: number
+          minimum: 0
+          maximum: 1
+          description: 'Бинарный индекс выполнения правил: 0.0 — правила пройдены; 1.0 — нарушены. Не PD и не прогноз
+            вероятности дефолта. Для совместимости Java использует riskScore < 0.5.'
+          enum:
+          - 0.0
+          - 1.0
+      required:
+      - assessmentId
+      - featureSchemaVersion
+      - modelVersion
+      - riskScore
+    ReadyView:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          const: READY
+        modelVersion:
+          type: string
+          minLength: 1
+          maxLength: 128
+          pattern: '[\s\S]*\S[\s\S]*'
+        featureSchemaVersion:
+          type: string
+          const: '4'
+        supportedProductCodes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ProductCode'
+          minItems: 1
+          uniqueItems: true
+          maxItems: 100
+      required:
+      - status
+      - modelVersion
+      - featureSchemaVersion
+      - supportedProductCodes
+    LiveView:
+      type: object
+      additionalProperties: false
+      properties:
+        status:
+          type: string
+          const: UP
+      required:
+      - status
+    GovernmentContractFeatures:
+      type: object
+      additionalProperties: false
+      properties:
+        contractAmount:
+          $ref: '#/components/schemas/PositiveMoney'
+        advanceAmount:
+          $ref: '#/components/schemas/Money'
+        executionEndDate:
+          type: string
+          format: date
+        finalPaymentDate:
+          type: string
+          format: date
+        plannedEndDate:
+          type: string
+          format: date
+      required:
+      - contractAmount
+      - advanceAmount
+      - executionEndDate
+      - finalPaymentDate
+      - plannedEndDate
+      description: Нормализованные данные контракта; plannedEndDate = asOfDate исходной попытки + termMonths. Номер
+        и текст в скоринг не передаются. Java проверяет аванс, 70% чистой суммы и календарные сроки; Python перепроверяет
+        семантику признаков.
+  responses:
+    BadRequest:
+      description: Неверный JSON
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:malformed-request
+            title: Неверный JSON
+            status: 400
+            code: MALFORMED_REQUEST
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    InvalidFeatures:
+      description: Признаки не соответствуют контракту
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:invalid-features
+            title: Признаки не соответствуют контракту
+            status: 422
+            code: INVALID_FEATURES
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+            errors:
+            - field: features.amount
+              code: POSITIVE_REQUIRED
+              message: Сумма должна быть положительной
+    NotReady:
+      description: Движок правил не готов
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:model-not-ready
+            title: Модель ещё не готова
+            status: 503
+            code: MODEL_NOT_READY
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+    InferenceFailed:
+      description: Ошибка вычисления правил
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/RequestId'
+        Cache-Control:
+          $ref: '#/components/headers/NoStore'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          example:
+            type: urn:credit-cabinet:problem:inference-failed
+            title: Не удалось получить оценку
+            status: 500
+            code: INFERENCE_FAILED
+            requestId: 291536c3-43fc-4419-a671-44e4cd902f3e
+x-timeout-seconds: 10

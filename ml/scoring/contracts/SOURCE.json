@@ -1,0 +1,11 @@
+{
+  "repository": "mkuzhvv/credit-cabinet",
+  "baseCommit": "c5efe263f89f1a3b24eb8bb53b22851e65255e54",
+  "baseContract": "docs/contracts/scoring.openapi.yaml",
+  "changes": [
+    "featureSchemaVersion=4",
+    "features.cashBalance required",
+    "riskScore 0/1 policy index",
+    "current overdue checked by both Java and rule engine"
+  ]
+}

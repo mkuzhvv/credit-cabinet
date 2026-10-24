@@ -1,0 +1,25 @@
+# Локальное окружение, кэш и веса
+.venv/
+venv/
+.cache/
+__pycache__/
+*.py[cod]
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth
+/SBAnational.csv
+
+# В Git отправляем минимальный комплект запуска.
+# Проверки, отчёты и эксперименты остаются локально.
+/reports/
+/profiles/
+/evaluation/
+/evaluate.py
+/test_*.py
+/INTEGRATION.md
+/MODEL_CARD.md
+/tokenizer_metadata.json
+/contracts/README.md
+/contracts/acceptance-cases.json

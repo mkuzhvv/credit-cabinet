@@ -1,0 +1,8 @@
+{
+  "algorithmVersion": "cashflow-v1",
+  "featureSchemaVersion": "4",
+  "incomeStress": "0.10",
+  "paymentSafetyFactor": "1.30",
+  "cashReserveMonths": "1.00",
+  "riskCutoff": "0.50"
+}
