@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:credit-cabinet:assistant-reply:1",
+  "title": "AssistantReply v1",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "answer": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 3000,
+      "description": "Обычный русский текст, без HTML. Обычно 1–3 предложения; не более одного уточняющего вопроса.",
+      "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+    },
+    "recommendedProductCode": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 64,
+          "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+          "description": "Стабильный код из каталога. MVP: WORKING_CAPITAL, OVERDRAFT, REVOLVING_LINE, LONG_TERM, GOVERNMENT_CONTRACT_LINE. Список не зашит в enum; новый код требует явной поддержки формы, политики и ML."
+        },
+        {
+          "type": "null"
+        }
+      ]
+    }
+  },
+  "required": [
+    "answer",
+    "recommendedProductCode"
+  ],
+  "description": "Код продукта должен присутствовать во входном context.catalog. Межполевую проверку выполняет Java. Только ответ и рекомендация: никаких команд изменения формы, отправки, решения или вызова инструментов."
+}

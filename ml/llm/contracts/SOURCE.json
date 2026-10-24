@@ -1,0 +1,6 @@
+{
+  "repository": "mkuzhvv/credit-cabinet",
+  "commit": "c5efe263f89f1a3b24eb8bb53b22851e65255e54",
+  "path": "docs/contracts/llm",
+  "purpose": "Pinned schemas and test fixtures. Runtime catalog must come from Java."
+}
