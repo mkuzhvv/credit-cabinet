@@ -48,3 +48,6 @@ pytorch_model*.bin
 # Local datasets and backups
 SBAnational.csv
 scoring-before-rules-*/
+
+# Local request created from the backend integration example
+/scoring/request.json
