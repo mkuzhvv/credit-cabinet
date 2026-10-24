@@ -72,7 +72,7 @@ class RuleEngine:
     def __init__(self, policy_path=None, catalog_path=None, schema_path=None):
         self.policy = load_json(policy_path or ROOT / 'policy.json')
         self.catalog = load_json(catalog_path or ROOT / 'catalog.json')
-        schemas = load_json(schema_path or ROOT / 'contracts/schemas.json')
+        schemas = load_json(schema_path or ROOT / 'schema.json')
         self.validators = {name: validator(schemas, name) for name in ['ScoringRequest', 'ScoringResponse', 'ReadyView', 'LiveView', 'Problem']}
         self.stress = Decimal(self.policy['incomeStress'])
         self.safety = Decimal(self.policy['paymentSafetyFactor'])
