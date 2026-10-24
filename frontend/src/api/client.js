@@ -207,7 +207,7 @@ function evaluateMockApplication(app, forcedOutcome = null) {
       {
         clarificationId: '1f9bd36f-e62b-47cd-a8c3-fc3227fc6893',
         field: 'form.averageMonthlyInflow',
-        code: 'ZERO_INFLOW_CONFIRMATION',
+        /*code: 'ZERO_INFLOW_CONFIRMATION',*/
         message:
           'Подтвердите, что среднемесячные поступления за указанный отчётный период равны нулю, либо исправьте значение.',
         observedValue: '0.00',
@@ -225,7 +225,7 @@ function evaluateMockApplication(app, forcedOutcome = null) {
       decidedAt: new Date().toISOString(),
       reasons: [
         {
-          code: 'RISK_ABOVE_LIMIT',
+          /*code: 'RISK_ABOVE_LIMIT', */
           message:
             'Оценка риска не соответствует условиям демонстрационной кредитной политики (свободный денежный поток ниже расчётной кредитной нагрузки).',
         },

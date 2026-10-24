@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import {
   Package,
   Zap,
@@ -150,6 +150,18 @@ export default function ProductsPage({
   const [needSelectWarning, setNeedSelectWarning] = useState(false);
   const productsSectionRef = useRef(null);
 
+  // Блокировка прокрутки фона при открытии модального окна «Подробнее»
+  useEffect(() => {
+    if (modalProduct) {
+      document.body.style.overflow = 'hidden';
+    } else {
+      document.body.style.overflow = '';
+    }
+    return () => {
+      document.body.style.overflow = '';
+    };
+  }, [modalProduct]);
+
   const scrollToProducts = () => {
     productsSectionRef.current?.scrollIntoView({
       behavior: 'smooth',
@@ -207,14 +219,14 @@ export default function ProductsPage({
           </div>
 
           {/* Правая часть: Аккуратная картинка с импортом из src/assets */}
-        <div className="relative w-64 h-52 sm:w-80 sm:h-64 shrink-0 flex items-center justify-center select-none z-10">
-          <img
-            src={walletImg}
-            alt="Кредиты для бизнеса"
-            className="w-full h-full object-contain transition-transform duration-300 hover:scale-105"
-          />
+          <div className="relative w-64 h-52 sm:w-80 sm:h-64 shrink-0 flex items-center justify-center select-none z-10">
+            <img
+              src={walletImg}
+              alt="Кредиты для бизнеса"
+              className="w-full h-full object-contain transition-transform duration-300 hover:scale-105"
+            />
+          </div>
         </div>
-      </div>
 
         {/* 4 плашки с ключевыми параметрами линейки */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -255,39 +267,6 @@ export default function ProductsPage({
           </div>
         </div>
       </div>
-
-      {/* Недавние заявки компании */}
-      {applications.length > 0 && (
-        <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-200/90 shadow-xs">
-          <div className="flex items-center gap-2 text-sm font-bold text-gray-900 mb-3">
-            <History className="w-4 h-4 text-[#EF3124]" />
-            <span>Ваши недавние заявки ({applications.length})</span>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-            {applications.slice(0, 4).map((app) => (
-              <div
-                key={app.id}
-                onClick={() => onOpenApplication(app.id)}
-                className="p-3.5 rounded-2xl bg-gray-50 hover:bg-red-50/40 border border-gray-200 hover:border-[#EF3124]/40 transition-all flex items-center justify-between cursor-pointer"
-              >
-                <div>
-                  <div className="font-semibold text-sm text-gray-900">
-                    {app.productName}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    Сумма: {formatRubles(app.amount)} • Срок:{' '}
-                    {app.termMonths ? `${app.termMonths} мес.` : '—'} • v{app.version}
-                  </div>
-                </div>
-                <span className="text-xs font-semibold text-[#EF3124] flex items-center gap-1">
-                  <span>Открыть</span>
-                  <ArrowRight className="w-3.5 h-3.5" />
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
 
       {/* Шпаргалка «Как выбрать подходящий продукт» */}
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs">
@@ -376,7 +355,7 @@ export default function ProductsPage({
                     : 'border-gray-200/90 shadow-xs hover:shadow-md hover:border-gray-300'
                 }`}
               >
-                <div>
+                <div className="flex flex-col flex-1">
                   <div className="flex items-start justify-between gap-2 mb-4">
                     <div
                       className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 transition-colors ${
@@ -399,7 +378,8 @@ export default function ProductsPage({
                     </span>
                   </div>
 
-                  <h3 className="text-lg sm:text-xl font-bold text-gray-900 mb-1 line-clamp-1">
+                  {/* Полное название без обрезки + единая высота для ровной сетки */}
+                  <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1 leading-snug min-h-[2.75rem] flex items-center">
                     {product.name}
                   </h3>
                   <p className="text-xs font-medium text-[#EF3124] mb-2.5 line-clamp-1">
@@ -409,7 +389,7 @@ export default function ProductsPage({
                     {product.description}
                   </p>
 
-                  <div className="grid grid-cols-2 gap-2.5 mb-6">
+                  <div className="grid grid-cols-2 gap-2.5 mb-6 mt-auto">
                     <div className="bg-gray-50 p-3 rounded-2xl border border-gray-100">
                       <div className="flex items-center gap-1 text-[11px] text-gray-500 mb-0.5">
                         <Wallet className="w-3 h-3" />
@@ -501,6 +481,41 @@ export default function ProductsPage({
             );
           })}
         </div>
+      </div>
+
+      {/* Недавние заявки компании (перенесены под карточки с якорем для скролла) */}
+      <div id="recent-applications" className="scroll-mt-24">
+        {applications.length > 0 && (
+          <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-200/90 shadow-xs">
+            <div className="flex items-center gap-2 text-sm font-bold text-gray-900 mb-3">
+              <History className="w-4 h-4 text-[#EF3124]" />
+              <span>Ваши недавние заявки ({applications.length})</span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {applications.slice(0, 4).map((app) => (
+                <div
+                  key={app.id}
+                  onClick={() => onOpenApplication(app.id)}
+                  className="p-3.5 rounded-2xl bg-gray-50 hover:bg-red-50/40 border border-gray-200 hover:border-[#EF3124]/40 transition-all flex items-center justify-between cursor-pointer"
+                >
+                  <div>
+                    <div className="font-semibold text-sm text-gray-900">
+                      {app.productName}
+                    </div>
+                    <div className="text-xs text-gray-500">
+                      Сумма: {formatRubles(app.amount)} • Срок:{' '}
+                      {app.termMonths ? `${app.termMonths} мес.` : '—'} • v{app.version}
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-[#EF3124] flex items-center gap-1">
+                    <span>Открыть</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Общие условия */}

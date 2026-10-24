@@ -284,11 +284,11 @@ export default function ApplicationPage({
           </div>
           <div className="flex flex-wrap gap-1.5">
             {[
-              { code: 'DRAFT', label: '1. Черновик (DRAFT)' },
-              { code: 'APPROVED', label: '2. Одобрено (APPROVED)' },
-              { code: 'DECLINED', label: '3. Отказ (DECLINED)' },
-              { code: 'NEEDS_INFO', label: '4. Уточнение 0 ₽ (NEEDS_INFO)' },
-              { code: 'TECHNICAL_HOLD', label: '5. Тех. сбой (TECHNICAL_HOLD)' },
+              { code: 'DRAFT', label: '1. Черновик' },
+              { code: 'APPROVED', label: '2. Одобрено' },
+              { code: 'DECLINED', label: '3. Отказ' },
+              { code: 'NEEDS_INFO', label: '4. Уточнение 0 ₽' },
+              { code: 'TECHNICAL_HOLD', label: '5. Тех. сбой' },
             ].map((item) => (
               <button
                 key={item.code}
@@ -415,7 +415,6 @@ export default function ApplicationPage({
             {decision.reasons?.map((r, idx) => (
               <div key={idx} className="text-sm text-gray-800 font-medium">
                 • {r.message}{' '}
-                <span className="text-xs text-gray-400">({r.code})</span>
               </div>
             ))}
           </div>
@@ -457,7 +456,7 @@ export default function ApplicationPage({
             className="py-3 px-5 rounded-xl bg-orange-600 hover:bg-orange-700 text-white text-sm font-semibold flex items-center gap-2 transition-all cursor-pointer disabled:opacity-60"
           >
             <RefreshCw className={`w-4 h-4 ${isSubmitting ? 'animate-spin' : ''}`} />
-            <span>Повторить проверку (Retry)</span>
+            <span>Повторить проверку</span>
           </button>
         </div>
       )}
@@ -501,7 +500,7 @@ export default function ApplicationPage({
               />
               <div>
                 <span className="font-semibold text-gray-900">
-                  Подтвердить нулевые поступления (CONFIRM_VALUE)
+                  Подтвердить нулевые поступления
                 </span>
                 <p className="text-xs text-gray-500">
                   Оставить значение 0.00 ₽ и передать заявку дальше на проверку.
@@ -529,7 +528,7 @@ export default function ApplicationPage({
               />
               <div>
                 <span className="font-semibold text-gray-900">
-                  Я исправил значение поступлений в форме ниже (VALUE_CORRECTED)
+                  Я исправил значение поступлений в форме ниже
                 </span>
                 <p className="text-xs text-gray-500">
                   Укажите положительную сумму в поле «Среднемесячные поступления» ниже и нажмите «Отправить».
