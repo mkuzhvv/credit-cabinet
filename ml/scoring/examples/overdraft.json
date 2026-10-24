@@ -1,0 +1,37 @@
+{
+  "assessmentId": "71b03990-acdb-5ee6-9f50-31aca81edaf5",
+  "applicationId": "18058978-e887-5c5c-acb6-0c4589b9d9a0",
+  "featureSchemaVersion": "4",
+  "features": {
+    "productCode": "OVERDRAFT",
+    "currency": "RUB",
+    "amount": "500000.00",
+    "termMonths": 12,
+    "averageMonthlyInflow": "2000000.00",
+    "averageMonthlyOutflow": "800000.00",
+    "reportingPeriod": {
+      "startDate": "2026-07-01",
+      "endDate": "2026-09-30",
+      "months": 3
+    },
+    "asOfDate": "2026-10-22",
+    "businessAgeMonths": 86,
+    "creditHistory": {
+      "status": "AVAILABLE",
+      "asOfDate": "2026-10-22",
+      "delinquencyPeriod": {
+        "startDate": "2025-10-01",
+        "endDate": "2026-09-30",
+        "months": 12
+      },
+      "totalOutstandingDebt": "350000.00",
+      "monthlyDebtPayment": "20000.00",
+      "overdueDebtAmount": "0.00",
+      "maxDaysPastDueLast12Months": 0
+    },
+    "projectBudget": null,
+    "trancheTermMonths": null,
+    "governmentContract": null,
+    "cashBalance": "1000000.00"
+  }
+}

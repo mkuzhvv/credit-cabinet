@@ -1,0 +1,37 @@
+{
+  "assessmentId": "8de449ef-d46c-4a0d-b108-e37d3b00bd94",
+  "applicationId": "7be0c0bf-9019-47e0-a6b1-67548f1038f2",
+  "featureSchemaVersion": "4",
+  "features": {
+    "productCode": "WORKING_CAPITAL",
+    "currency": "RUB",
+    "amount": "500000.00",
+    "termMonths": 12,
+    "averageMonthlyInflow": "1200000.00",
+    "averageMonthlyOutflow": "800000.00",
+    "reportingPeriod": {
+      "startDate": "2026-04-01",
+      "endDate": "2026-09-30",
+      "months": 6
+    },
+    "asOfDate": "2026-10-22",
+    "businessAgeMonths": 86,
+    "creditHistory": {
+      "status": "AVAILABLE",
+      "asOfDate": "2026-10-22",
+      "delinquencyPeriod": {
+        "startDate": "2025-10-01",
+        "endDate": "2026-09-30",
+        "months": 12
+      },
+      "totalOutstandingDebt": "350000.00",
+      "monthlyDebtPayment": "20000.00",
+      "overdueDebtAmount": "0.00",
+      "maxDaysPastDueLast12Months": 0
+    },
+    "projectBudget": null,
+    "trancheTermMonths": null,
+    "governmentContract": null,
+    "cashBalance": "1000000.00"
+  }
+}

@@ -6,9 +6,13 @@
 
 # IDE and OS files
 .idea/
+.vscode/
 *.iml
 .DS_Store
 Thumbs.db
+*.swp
+*.swo
+*~
 
 # Java and Gradle build output
 target/
@@ -20,6 +24,9 @@ node_modules/
 dist/
 .next/
 .vite/
+.turbo/
+.parcel-cache/
+*.tsbuildinfo
 coverage/
 
 # Python environments and caches
@@ -31,6 +38,31 @@ __pycache__/
 .mypy_cache/
 .ruff_cache/
 .ipynb_checkpoints/
+.cache/
+.tox/
+.nox/
+.eggs/
+*.egg-info/
+.coverage
+.coverage.*
+htmlcov/
 
 # Runtime logs
 *.log
+logs/
+tmp/
+
+# Local model downloads and serialized ML artifacts
+/ml/**/*.gguf
+/ml/**/*.safetensors
+/ml/**/*.onnx
+/ml/**/*.pt
+/ml/**/*.pth
+/ml/**/*.pkl
+/ml/**/*.joblib
+/ml/**/pytorch_model*.bin
+/ml/**/.ollama/
+
+# Local datasets and backups
+SBAnational.csv
+/scoring-before-rules-*/

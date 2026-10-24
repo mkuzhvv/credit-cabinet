@@ -1,0 +1,745 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$defs": {
+    "Money": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 15,
+      "pattern": "^(0|[1-9][0-9]{0,11})\\.[0-9]{2}$",
+      "description": "Неотрицательная сумма в рублях, ровно две цифры после точки. Java BigDecimal / Python Decimal. Это технический диапазон, не лимит продукта."
+    },
+    "PositiveMoney": {
+      "type": "string",
+      "minLength": 4,
+      "maxLength": 15,
+      "pattern": "^(0|[1-9][0-9]{0,11})\\.[0-9]{2}$",
+      "description": "Положительная сумма в RUB, ровно две цифры после точки.",
+      "not": {
+        "const": "0.00"
+      }
+    },
+    "ProductCode": {
+      "type": "string",
+      "minLength": 2,
+      "maxLength": 64,
+      "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+      "description": "Стабильный код из каталога. MVP: WORKING_CAPITAL, OVERDRAFT, REVOLVING_LINE, LONG_TERM, GOVERNMENT_CONTRACT_LINE. Список не зашит в enum; новый код требует явной поддержки формы, политики и движка правил."
+    },
+    "FieldCode": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 120,
+      "pattern": "^[a-z][a-zA-Z0-9]*(\\.[a-z][a-zA-Z0-9]*)*$",
+      "description": "Путь поля, например form.amount или form.financingPurpose."
+    },
+    "Version": {
+      "type": "integer",
+      "minimum": 0,
+      "format": "int64",
+      "maximum": 9007199254740991,
+      "description": "Версия заявки. Меняется при изменении данных или состояния; безопасна для JavaScript Number."
+    },
+    "ReportingPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "months": {
+          "type": "integer",
+          "enum": [
+            3,
+            6,
+            12
+          ]
+        }
+      },
+      "required": [
+        "startDate",
+        "endDate",
+        "months"
+      ],
+      "description": "Полные календарные месяцы до месяца calculationDate черновика; границы включительно. Число месяцев определяет продукт: OVERDRAFT=3, WORKING_CAPITAL/REVOLVING_LINE=6, LONG_TERM/GOVERNMENT_CONTRACT_LINE=12. Период фиксируется сервером и не сдвигается при submit/retry."
+    },
+    "FieldIssue": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "field": {
+          "$ref": "#/$defs/FieldCode"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "message": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        }
+      },
+      "required": [
+        "field",
+        "code",
+        "message"
+      ]
+    },
+    "Problem": {
+      "type": "object",
+      "additionalProperties": true,
+      "required": [
+        "type",
+        "title",
+        "status",
+        "code",
+        "requestId"
+      ],
+      "properties": {
+        "type": {
+          "type": "string",
+          "format": "uri-reference"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 200,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        },
+        "status": {
+          "type": "integer",
+          "minimum": 400,
+          "maximum": 599
+        },
+        "detail": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 2000,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        },
+        "instance": {
+          "type": "string",
+          "format": "uri-reference"
+        },
+        "code": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 80,
+          "pattern": "^[A-Z][A-Z0-9_]*$"
+        },
+        "requestId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "errors": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FieldIssue"
+          },
+          "maxItems": 30
+        },
+        "currentVersion": {
+          "$ref": "#/$defs/Version"
+        },
+        "currentProductTermsVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 64,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        }
+      },
+      "description": "RFC 9457 application/problem+json. code используется программно; message/title — для человека. Неизвестные расширения ответа клиент игнорирует. Стек, финансовые данные и секреты сюда не включаются."
+    },
+    "CreditHistoryPeriod": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "startDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "endDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "months": {
+          "type": "integer",
+          "const": 12
+        }
+      },
+      "required": [
+        "startDate",
+        "endDate",
+        "months"
+      ],
+      "description": "12 полных календарных месяцев перед месяцем creditHistory.asOfDate; границы включительно. Период не обязан совпадать с reportingPeriod анкеты. Соответствие календарных границ проверяют Java и Python."
+    },
+    "CreditHistory": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "AVAILABLE",
+            "NO_HISTORY"
+          ]
+        },
+        "asOfDate": {
+          "type": "string",
+          "format": "date",
+          "description": "Дата состояния обязательств в отчёте; фиксируется источником и не сдвигается при retry."
+        },
+        "delinquencyPeriod": {
+          "$ref": "#/$defs/CreditHistoryPeriod"
+        },
+        "totalOutstandingDebt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Остаток задолженности по кредитным обязательствам в отчёте на asOfDate, включая просроченную часть."
+        },
+        "monthlyDebtPayment": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Сумма ежемесячных платежей по действующим кредитным обязательствам в отчёте на asOfDate. Это не дополнительный расход к averageMonthlyOutflow; существующие обязательства уже входят в расходы."
+        },
+        "overdueDebtAmount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Money"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "description": "Просроченная часть totalOutstandingDebt на asOfDate; не больше общей задолженности."
+        },
+        "maxDaysPastDueLast12Months": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "description": "Максимальное число полных дней просрочки, наблюдавшееся в delinquencyPeriod. Длительная просрочка может начаться до этого периода. При отсутствии просрочек в полной истории — 0."
+        }
+      },
+      "required": [
+        "status",
+        "asOfDate",
+        "delinquencyPeriod",
+        "totalOutstandingDebt",
+        "monthlyDebtPayment",
+        "overdueDebtAmount",
+        "maxDaysPastDueLast12Months"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "AVAILABLE"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "totalOutstandingDebt": {
+                "$ref": "#/$defs/Money"
+              },
+              "monthlyDebtPayment": {
+                "$ref": "#/$defs/Money"
+              },
+              "overdueDebtAmount": {
+                "$ref": "#/$defs/Money"
+              },
+              "maxDaysPastDueLast12Months": {
+                "type": "integer",
+                "minimum": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "status": {
+                "const": "NO_HISTORY"
+              }
+            },
+            "required": [
+              "status"
+            ]
+          },
+          "then": {
+            "properties": {
+              "totalOutstandingDebt": {
+                "type": "null"
+              },
+              "monthlyDebtPayment": {
+                "type": "null"
+              },
+              "overdueDebtAmount": {
+                "type": "null"
+              },
+              "maxDaysPastDueLast12Months": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ],
+      "description": "Проверка успешно завершена. AVAILABLE означает наличие полных согласованных сведений за период, а не положительную историю. NO_HISTORY означает отсутствие записей; все четыре показателя равны null, статус сохраняется отдельно и не подменяется хорошей историей или автоматическим одобрением. Правило текущей просрочки не нарушено; денежные ограничения остаются обязательными. При недоступности, неполном или некорректном отчёте Java не вызывает скоринг. Проверку принадлежности компании, источника и даты получения выполняет Java; их технические метаданные не входят в формулу."
+    },
+    "ScoringFeatures": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "productCode": {
+          "$ref": "#/$defs/ProductCode"
+        },
+        "currency": {
+          "type": "string",
+          "const": "RUB"
+        },
+        "amount": {
+          "$ref": "#/$defs/PositiveMoney"
+        },
+        "termMonths": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 600
+        },
+        "averageMonthlyInflow": {
+          "$ref": "#/$defs/Money"
+        },
+        "averageMonthlyOutflow": {
+          "$ref": "#/$defs/Money"
+        },
+        "reportingPeriod": {
+          "$ref": "#/$defs/ReportingPeriod"
+        },
+        "asOfDate": {
+          "type": "string",
+          "format": "date",
+          "description": "UTC-дата принятия исходной попытки submit, по ней рассчитывают возраст бизнеса и plannedEndDate. При техническом retry сохраняется. Не обязана совпадать с calculationDate черновика или датой кредитного отчёта; reportingPeriod закреплён при создании черновика отдельно."
+        },
+        "businessAgeMonths": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "creditHistory": {
+          "$ref": "#/$defs/CreditHistory"
+        },
+        "projectBudget": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PositiveMoney"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "trancheTermMonths": {
+          "anyOf": [
+            {
+              "type": "integer",
+              "minimum": 3,
+              "maximum": 6
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "governmentContract": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/GovernmentContractFeatures"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "cashBalance": {
+          "$ref": "#/$defs/Money",
+          "description": "Подтверждённый свободный денежный остаток до нового финансирования. Не включает сумму нового кредита, заложенные или недоступные деньги; неизвестный остаток нельзя заменять нулём."
+        }
+      },
+      "required": [
+        "productCode",
+        "currency",
+        "amount",
+        "termMonths",
+        "averageMonthlyInflow",
+        "averageMonthlyOutflow",
+        "reportingPeriod",
+        "asOfDate",
+        "businessAgeMonths",
+        "creditHistory",
+        "projectBudget",
+        "trancheTermMonths",
+        "governmentContract",
+        "cashBalance"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "productCode": {
+                "const": "WORKING_CAPITAL"
+              }
+            },
+            "required": [
+              "productCode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reportingPeriod": {
+                "properties": {
+                  "months": {
+                    "const": 6
+                  }
+                }
+              },
+              "projectBudget": {
+                "type": "null"
+              },
+              "trancheTermMonths": {
+                "type": "null"
+              },
+              "governmentContract": {
+                "type": "null"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 12
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "productCode": {
+                "const": "OVERDRAFT"
+              }
+            },
+            "required": [
+              "productCode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reportingPeriod": {
+                "properties": {
+                  "months": {
+                    "const": 3
+                  }
+                }
+              },
+              "projectBudget": {
+                "type": "null"
+              },
+              "trancheTermMonths": {
+                "type": "null"
+              },
+              "governmentContract": {
+                "type": "null"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": 12,
+                "maximum": 12
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "productCode": {
+                "const": "REVOLVING_LINE"
+              }
+            },
+            "required": [
+              "productCode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reportingPeriod": {
+                "properties": {
+                  "months": {
+                    "const": 6
+                  }
+                }
+              },
+              "projectBudget": {
+                "type": "null"
+              },
+              "trancheTermMonths": {
+                "type": "integer",
+                "minimum": 3,
+                "maximum": 6
+              },
+              "governmentContract": {
+                "type": "null"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": 24,
+                "maximum": 24
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "productCode": {
+                "const": "LONG_TERM"
+              }
+            },
+            "required": [
+              "productCode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reportingPeriod": {
+                "properties": {
+                  "months": {
+                    "const": 12
+                  }
+                }
+              },
+              "projectBudget": {
+                "$ref": "#/$defs/PositiveMoney"
+              },
+              "trancheTermMonths": {
+                "type": "null"
+              },
+              "governmentContract": {
+                "type": "null"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": 24,
+                "maximum": 60
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "productCode": {
+                "const": "GOVERNMENT_CONTRACT_LINE"
+              }
+            },
+            "required": [
+              "productCode"
+            ]
+          },
+          "then": {
+            "properties": {
+              "reportingPeriod": {
+                "properties": {
+                  "months": {
+                    "const": 12
+                  }
+                }
+              },
+              "projectBudget": {
+                "type": "null"
+              },
+              "trancheTermMonths": {
+                "type": "null"
+              },
+              "governmentContract": {
+                "$ref": "#/$defs/GovernmentContractFeatures"
+              },
+              "termMonths": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 12
+              }
+            }
+          }
+        }
+      ],
+      "description": "Схема 4: все поля схемы 3 и обязательный cashBalance. averageMonthlyOutflow уже включает действующие долговые платежи; второй раз они не вычитаются. Текущую просрочку проверяют Java и движок правил. NO_HISTORY не заменяется фиктивными суммами. Обязательные банковские проверки, которых нет во входе, выполняет Java."
+    },
+    "ScoringRequest": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "assessmentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "applicationId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "featureSchemaVersion": {
+          "type": "string",
+          "const": "4"
+        },
+        "features": {
+          "$ref": "#/$defs/ScoringFeatures"
+        }
+      },
+      "required": [
+        "assessmentId",
+        "applicationId",
+        "featureSchemaVersion",
+        "features"
+      ]
+    },
+    "ScoringResponse": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "assessmentId": {
+          "type": "string",
+          "format": "uuid"
+        },
+        "featureSchemaVersion": {
+          "type": "string",
+          "const": "4"
+        },
+        "modelVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*",
+          "description": "Версия алгоритма, контракта, каталога и параметров. Имя поля сохранено для совместимости; обученной модели нет."
+        },
+        "riskScore": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "Бинарный индекс выполнения правил: 0.0 — правила пройдены; 1.0 — нарушены. Не PD и не прогноз вероятности дефолта. Для совместимости Java использует riskScore < 0.5.",
+          "enum": [
+            0.0,
+            1.0
+          ]
+        }
+      },
+      "required": [
+        "assessmentId",
+        "featureSchemaVersion",
+        "modelVersion",
+        "riskScore"
+      ]
+    },
+    "ReadyView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "READY"
+        },
+        "modelVersion": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "[\\s\\S]*\\S[\\s\\S]*"
+        },
+        "featureSchemaVersion": {
+          "type": "string",
+          "const": "4"
+        },
+        "supportedProductCodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/ProductCode"
+          },
+          "minItems": 1,
+          "uniqueItems": true,
+          "maxItems": 100
+        }
+      },
+      "required": [
+        "status",
+        "modelVersion",
+        "featureSchemaVersion",
+        "supportedProductCodes"
+      ]
+    },
+    "LiveView": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "status": {
+          "type": "string",
+          "const": "UP"
+        }
+      },
+      "required": [
+        "status"
+      ]
+    },
+    "GovernmentContractFeatures": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "contractAmount": {
+          "$ref": "#/$defs/PositiveMoney"
+        },
+        "advanceAmount": {
+          "$ref": "#/$defs/Money"
+        },
+        "executionEndDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "finalPaymentDate": {
+          "type": "string",
+          "format": "date"
+        },
+        "plannedEndDate": {
+          "type": "string",
+          "format": "date"
+        }
+      },
+      "required": [
+        "contractAmount",
+        "advanceAmount",
+        "executionEndDate",
+        "finalPaymentDate",
+        "plannedEndDate"
+      ],
+      "description": "Нормализованные данные контракта; plannedEndDate = asOfDate исходной попытки + termMonths. Номер и текст в скоринг не передаются. Java проверяет аванс, 70% чистой суммы и календарные сроки; Python перепроверяет семантику признаков."
+    }
+  }
+}
