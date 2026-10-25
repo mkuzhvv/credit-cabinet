@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Header from './components/Header';
 import DisclaimerBanner from './components/DisclaimerBanner';
 import AssistantWidget from './components/AssistantWidget';
@@ -12,6 +12,7 @@ import {
   fetchApplicationById,
   getApiMode,
   setApiMode,
+  storageKey,
 } from './api/client';
 
 export default function App() {
@@ -29,83 +30,87 @@ export default function App() {
   const [isCreating, setIsCreating] = useState(false);
   const [connectionError, setConnectionError] = useState(null);
 
-  const bootstrapApp = async () => {
-    setIsLoading(true);
-    setConnectionError(null);
-    try {
-      const me = await initSessionAndGetUser();
-      setUserContext(me);
-
-      const [prodList, appPage] = await Promise.all([
-        fetchProducts(),
-        fetchApplications(),
-      ]);
-
-      setProducts(prodList.items || []);
-      setApplications(appPage.items || []);
-
-      const savedAppId = localStorage.getItem('alfa_active_app_id');
-      if (savedAppId) {
-        try {
-          const fullApp = await fetchApplicationById(savedAppId);
-          setCurrentApp(fullApp);
-        } catch {
-          localStorage.removeItem('alfa_active_app_id');
-        }
-      } else if (appPage.items?.length > 0) {
-        const firstApp = await fetchApplicationById(appPage.items[0].id);
-        setCurrentApp(firstApp);
-      }
-    } catch (err) {
-      setConnectionError(
-        err?.title ||
-          'Не удалось подключиться к Java-серверу (/api/v1). Проверьте, что бэкенд запущен, или переключитесь в режим «Моки OpenAPI» в шапке.'
-      );
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [bootstrapAttempt, setBootstrapAttempt] = useState(0);
+  const modeRef = useRef(apiModeState);
+  const creating = useRef(false);
+  modeRef.current = apiModeState;
 
   useEffect(() => {
-    bootstrapApp();
-  }, [apiModeState]);
+    let active = true;
+    setIsLoading(true); setConnectionError(null); setProducts([]); setApplications([]);
+    setCurrentApp(null); setSelectedProductCode(null); setFocusedField(null); setActivePage('products');
+    const bootstrap = async () => {
+      try {
+        const me = await initSessionAndGetUser();
+        if (!active) return;
+        setUserContext(me);
+        const [catalog, page] = await Promise.all([fetchProducts(), fetchApplications()]);
+        if (!active) return;
+        setProducts(catalog.items || []); setApplications(page.items || []);
+        const savedId = localStorage.getItem(storageKey('active_app_id'));
+        let card = null;
+        if (savedId) {
+          try { card = await fetchApplicationById(savedId); }
+          catch (error) { if (error.status === 404) localStorage.removeItem(storageKey('active_app_id')); else throw error; }
+        }
+        if (!card && page.items?.length) card = await fetchApplicationById(page.items[0].id);
+        if (active) setCurrentApp(card);
+      } catch (error) {
+        if (active) setConnectionError(error.title || 'Не удалось подключиться к Java API. Проверьте запуск бэкенда или выберите моки в шапке.');
+      } finally { if (active) setIsLoading(false); }
+    };
+    bootstrap();
+    return () => { active = false; };
+  }, [apiModeState, bootstrapAttempt]);
 
   const handleToggleApiMode = () => {
     const next = apiModeState === 'mock' ? 'real' : 'mock';
-    setApiMode(next);
-    setApiModeState(next);
+    modeRef.current = next;
+    setIsLoading(true);
+    setUserContext(null);
+    setApiMode(next); setApiModeState(next);
   };
 
-  const handleCreateApplication = async (productCode) => {
-    setSelectedProductCode(productCode);
-    setIsCreating(true);
+  const refreshApplications = useCallback(async () => {
+    const mode = apiModeState;
+    try {
+      const page = await fetchApplications();
+      if (modeRef.current === mode) setApplications(page.items || []);
+    } catch { return; }
+  }, [apiModeState]);
+
+  const handleCreateApplication = async productCode => {
+    if (creating.current) return;
+    const mode = apiModeState;
+    creating.current = true; setIsCreating(true); setSelectedProductCode(productCode);
     try {
       const created = await createApplication(productCode);
-      setCurrentApp(created);
-      localStorage.setItem('alfa_active_app_id', created.id);
-      const appPage = await fetchApplications();
-      setApplications(appPage.items || []);
+      if (modeRef.current !== mode) return;
+      setCurrentApp(created); setFocusedField(null);
+      localStorage.setItem(storageKey('active_app_id'), created.id);
       setActivePage('application');
+      refreshApplications();
       window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      alert(err?.title || 'Ошибка при создании черновика заявки');
-    } finally {
-      setIsCreating(false);
-    }
+    } catch (error) { if (modeRef.current === mode) alert(error.title || 'Не удалось создать черновик. Повторите запрос.'); }
+    finally { creating.current = false; setIsCreating(false); }
   };
 
-  const handleOpenApplication = async (appId) => {
+  const handleOpenApplication = async id => {
+    const mode = apiModeState;
     try {
-      const fullApp = await fetchApplicationById(appId);
-      setCurrentApp(fullApp);
-      setSelectedProductCode(fullApp.product?.code || null);
-      localStorage.setItem('alfa_active_app_id', fullApp.id);
-      setActivePage('application');
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    } catch (err) {
-      alert(err?.title || 'Не удалось открыть заявку');
-    }
+      const card = await fetchApplicationById(id);
+      if (modeRef.current !== mode) return;
+      setCurrentApp(card); setSelectedProductCode(card.product.code); setFocusedField(null);
+      localStorage.setItem(storageKey('active_app_id'), card.id);
+      setActivePage('application'); window.scrollTo({ top: 0, behavior: 'smooth' });
+    } catch (error) { if (modeRef.current === mode) alert(error.title || 'Не удалось открыть заявку'); }
   };
+
+  const updateApplication = useCallback(updated => {
+    if (modeRef.current !== apiModeState) return;
+    setCurrentApp(previous => previous?.id === updated.id ? updated : previous);
+    refreshApplications();
+  }, [apiModeState, refreshApplications]);
 
   return (
     <div className="min-h-screen bg-[#F4F5F7] text-[#121214]">
@@ -125,10 +130,10 @@ export default function App() {
           <div className="mb-6 p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
             <span>{connectionError}</span>
             <button
-              onClick={handleToggleApiMode}
+              onClick={() => setBootstrapAttempt(value => value + 1)}
               className="shrink-0 py-2 px-4 rounded-xl bg-[#EF3124] text-white text-xs font-semibold cursor-pointer"
             >
-              Переключить на Моки OpenAPI
+              Повторить подключение
             </button>
           </div>
         )}
@@ -149,11 +154,9 @@ export default function App() {
           />
         ) : currentApp ? (
           <ApplicationPage
+            key={`${apiModeState}:${currentApp.id}`}
             application={currentApp}
-            setApplication={(updated) => {
-              setCurrentApp(updated);
-              fetchApplications().then((p) => setApplications(p.items || []));
-            }}
+            setApplication={updateApplication}
             onBackToProducts={() => setActivePage('products')}
             onCreateNewWithProduct={handleCreateApplication}
             onFocusField={setFocusedField}
@@ -176,8 +179,13 @@ export default function App() {
       </main>
 
       <AssistantWidget
-        applicationId={currentApp?.id || null}
-        productCode={currentApp?.product?.code || selectedProductCode}
+        key={`${apiModeState}:${userContext?.user?.id || 'loading'}`}
+        enabled={!isLoading && !connectionError}
+        apiMode={apiModeState}
+        products={products}
+        userId={userContext?.user?.id || 'demo'}
+        applicationId={activePage === 'application' ? currentApp?.id || null : null}
+        productCode={activePage === 'application' ? currentApp?.product?.code : selectedProductCode}
         focusedFieldCode={activePage === 'application' ? focusedField : null}
         onSelectRecommendedProduct={handleCreateApplication}
       />

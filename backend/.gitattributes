@@ -3,3 +3,4 @@ mvnw.cmd text eol=crlf
 *.java text eol=lf
 *.yaml text eol=lf
 pom.xml text eol=lf
+src/main/resources/assistant/tokenizer.json text eol=lf

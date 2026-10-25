@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1",
+  "companyId": "97daa92f-127c-4f70-8a0c-0711f13c62ef",
+  "source": "DEMO_BKI",
+  "sourceVersion": "test-past-overdue-v1",
+  "profile": {
+    "status": "AVAILABLE",
+    "asOfDate": "2026-10-24",
+    "delinquencyPeriod": {
+      "startDate": "2025-10-01",
+      "endDate": "2026-09-30",
+      "months": 12
+    },
+    "totalOutstandingDebt": "1200000.00",
+    "monthlyDebtPayment": "80000.00",
+    "overdueDebtAmount": "0.00",
+    "maxDaysPastDueLast12Months": 30
+  }
+}

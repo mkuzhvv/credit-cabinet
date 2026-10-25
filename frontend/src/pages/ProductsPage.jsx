@@ -22,7 +22,6 @@ import { formatRubles } from '../api/client';
 
 import walletImg from '../assets/wallet.jpg';
 
-// Полные данные всех 5 продуктов строго по документу
 const PRODUCT_DETAILS = {
   WORKING_CAPITAL: {
     subtitle: 'Одна сумма на закупки и текущие расходы',
@@ -74,7 +73,7 @@ const PRODUCT_DETAILS = {
     advice:
       'Выбирайте этот продукт, если деньги нужны регулярно, но брать всю сумму сразу неудобно.',
   },
-  EQUIPMENT: {
+  LONG_TERM: {
     subtitle: 'На оборудование, ремонт и расширение бизнеса',
     badgeColor: 'bg-purple-50 text-purple-700 border-purple-200',
     icon: Wrench,
@@ -90,7 +89,7 @@ const PRODUCT_DETAILS = {
     advice:
       'Выбирайте этот продукт, если вложение рассчитано на несколько лет. Более длительный срок уменьшает ежемесячный платёж, но увеличивает общую переплату.',
   },
-  GOV_CONTRACT: {
+  GOVERNMENT_CONTRACT_LINE: {
     subtitle: 'На исполнение контракта до получения оплаты от заказчика',
     badgeColor: 'bg-indigo-50 text-indigo-700 border-indigo-200',
     icon: Landmark,
@@ -128,14 +127,35 @@ const SELECTION_GUIDE = [
   {
     need: 'Распределить крупные расходы на несколько лет',
     productName: 'Кредит на длительный срок',
-    code: 'EQUIPMENT',
+    code: 'LONG_TERM',
   },
   {
     need: 'Исполнить заключённый государственный контракт',
     productName: 'Кредитная линия на госконтракт',
-    code: 'GOV_CONTRACT',
+    code: 'GOVERNMENT_CONTRACT_LINE',
   },
 ];
+
+function detailsFor(product) {
+  const terms = product.terms;
+  const visual = PRODUCT_DETAILS[product.code] || PRODUCT_DETAILS.WORKING_CAPITAL;
+  const range = terms.minTermMonths === terms.maxTermMonths ? `${terms.minTermMonths}` : `${terms.minTermMonths}–${terms.maxTermMonths}`;
+  let termLabel = `${range} месяцев`;
+  if (terms.overdraftRules) termLabel = `лимит ${range} мес. (возврат ${terms.overdraftRules.maxDebtPeriodDays} дн.)`;
+  if (terms.revolvingLineRules) termLabel = `линия ${range} мес. (транш ${terms.revolvingLineRules.minTrancheTermMonths}–${terms.revolvingLineRules.maxTrancheTermMonths} мес.)`;
+  const requirements = [`ИП или ООО, бизнес от ${terms.minBusinessAgeMonths} месяцев`, `финансовые показатели за ${terms.financialPeriodMonths} полных месяцев`];
+  if (terms.requiresSettlementAccount) requirements.push('требуется расчётный счёт');
+  if (terms.requiresRegularInflow) requirements.push('требуются регулярные поступления за последние три месяца');
+  if (terms.overdraftRules) requirements.push(`лимит до ${terms.overdraftRules.maxInflowSharePercent}% среднемесячных поступлений`);
+  if (terms.governmentContractRules) requirements.push(`заключённый контракт по 44-ФЗ, лимит до ${terms.governmentContractRules.maxNetContractSharePercent}% стоимости за вычетом аванса`);
+  if (product.code === 'LONG_TERM') requirements.push('цель финансирования и положительный бюджет проекта');
+  return { ...visual, amountLabel: `${formatRubles(terms.minAmount)}–${formatRubles(terms.maxAmount)}`,
+    termLabel, rateLabel: `${Number(terms.annualRatePercent)}% годовых`, repayment: terms.repaymentDescription,
+    requirements: requirements.join('; ') + '.',
+  };
+}
+
+const PRODUCT_ORDER = ['WORKING_CAPITAL', 'OVERDRAFT', 'REVOLVING_LINE', 'LONG_TERM', 'GOVERNMENT_CONTRACT_LINE'];
 
 export default function ProductsPage({
   products,
@@ -150,7 +170,6 @@ export default function ProductsPage({
   const [needSelectWarning, setNeedSelectWarning] = useState(false);
   const productsSectionRef = useRef(null);
 
-  // Блокировка прокрутки фона при открытии модального окна «Подробнее»
   useEffect(() => {
     if (modalProduct) {
       document.body.style.overflow = 'hidden';
@@ -185,7 +204,7 @@ export default function ProductsPage({
 
   return (
     <div className="space-y-8 pb-16">
-      {/* ================= ЛЕНДИНГ-БАННЕР ================= */}
+
       <div className="space-y-4">
         <div className="bg-white rounded-[32px] p-8 sm:p-12 border border-gray-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-8 overflow-hidden relative">
           <div className="max-w-xl space-y-6 z-10">
@@ -218,7 +237,7 @@ export default function ProductsPage({
             </div>
           </div>
 
-          {/* Правая часть: Аккуратная картинка с импортом из src/assets */}
+
           <div className="relative w-64 h-52 sm:w-80 sm:h-64 shrink-0 flex items-center justify-center select-none z-10">
             <img
               src={walletImg}
@@ -228,7 +247,7 @@ export default function ProductsPage({
           </div>
         </div>
 
-        {/* 4 плашки с ключевыми параметрами линейки */}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <div className="bg-white rounded-3xl p-6 border border-gray-200/80 shadow-2xs">
             <div className="text-xl sm:text-2xl font-extrabold text-[#121214]">
@@ -268,7 +287,7 @@ export default function ProductsPage({
         </div>
       </div>
 
-      {/* Шпаргалка «Как выбрать подходящий продукт» */}
+
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs">
         <h2 className="text-lg sm:text-xl font-bold text-gray-900 mb-1">
           Как выбрать подходящий продукт
@@ -305,7 +324,7 @@ export default function ProductsPage({
         </div>
       </div>
 
-      {/* ================= СЕКЦИЯ КАРТОЧЕК ПРОДУКТОВ (ПО 3 В РЯД ОДНОГО РАЗМЕРА) ================= */}
+
       <div ref={productsSectionRef} className="pt-2 space-y-6 scroll-mt-24">
         <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4">
           <div>
@@ -339,9 +358,8 @@ export default function ProductsPage({
         )}
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-stretch">
-          {products.map((product) => {
-            const meta =
-              PRODUCT_DETAILS[product.code] || PRODUCT_DETAILS.WORKING_CAPITAL;
+          {[...products].sort((left, right) => PRODUCT_ORDER.indexOf(left.code) - PRODUCT_ORDER.indexOf(right.code)).map((product) => {
+            const meta = detailsFor(product);
             const Icon = meta.icon;
             const isSelected = selectedProductCode === product.code;
 
@@ -378,7 +396,7 @@ export default function ProductsPage({
                     </span>
                   </div>
 
-                  {/* Полное название без обрезки + единая высота для ровной сетки */}
+
                   <h3 className="text-base sm:text-lg font-bold text-gray-900 mb-1 leading-snug min-h-[2.75rem] flex items-center">
                     {product.name}
                   </h3>
@@ -483,7 +501,7 @@ export default function ProductsPage({
         </div>
       </div>
 
-      {/* Недавние заявки компании (перенесены под карточки с якорем для скролла) */}
+
       <div id="recent-applications" className="scroll-mt-24">
         {applications.length > 0 && (
           <div className="bg-white rounded-3xl p-5 sm:p-6 border border-gray-200/90 shadow-xs">
@@ -518,7 +536,7 @@ export default function ProductsPage({
         )}
       </div>
 
-      {/* Общие условия */}
+
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs space-y-3">
         <div className="flex items-center gap-2 text-base font-bold text-gray-900">
           <ShieldCheck className="w-5 h-5 text-[#EF3124]" />
@@ -532,7 +550,7 @@ export default function ProductsPage({
         </p>
       </div>
 
-      {/* Модальное окно «Подробнее» */}
+
       {modalProduct && (
         <div
           onClick={() => setModalProduct(null)}

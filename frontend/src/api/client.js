@@ -1,7 +1,9 @@
 const BASE_URL = '/api/v1';
 
 let apiMode = localStorage.getItem('alfa_api_mode') || 'mock';
-let csrfToken = 'example-csrf-token';
+let csrfToken = null;
+let sessionPromise = null;
+const pendingCommands = new Map();
 let csrfHeaderName = 'X-CSRF-TOKEN';
 
 export function getApiMode() {
@@ -10,6 +12,8 @@ export function getApiMode() {
 
 export function setApiMode(mode) {
   apiMode = mode;
+  sessionPromise = null;
+  csrfToken = null;
   localStorage.setItem('alfa_api_mode', mode);
 }
 
@@ -29,9 +33,9 @@ export function toMoneyString(value) {
     return null;
   }
   const cleaned = String(value).replace(/\s/g, '').replace(',', '.');
-  const num = Number(cleaned);
-  if (Number.isNaN(num) || num < 0) return null;
-  return num.toFixed(2);
+  if (!/^\d+(?:\.\d{1,2})?$/.test(cleaned)) return cleaned;
+  const [whole, fraction = ''] = cleaned.split('.');
+  return `${whole.replace(/^0+(?=\d)/, '')}.${fraction.padEnd(2, '0')}`;
 }
 
 export function formatRubles(moneyStr) {
@@ -41,11 +45,11 @@ export function formatRubles(moneyStr) {
   return new Intl.NumberFormat('ru-RU', {
     style: 'currency',
     currency: 'RUB',
-    maximumFractionDigits: 0,
+    minimumFractionDigits: Number.isInteger(num) ? 0 : 2,
+    maximumFractionDigits: 2,
   }).format(num);
 }
 
-// ================= 5 ПРОДУКТОВ ИЗ НОВОГО ДОКУМЕНТА =================
 export const MOCK_PRODUCTS = [
   {
     code: 'WORKING_CAPITAL',
@@ -71,18 +75,18 @@ export const MOCK_PRODUCTS = [
     description:
       'Подойдёт, если платёж нужно провести сейчас, а деньги от покупателей поступят позже. Банк подключает лимит к расчётному счёту: вы используете его при недостатке собственных средств.',
     terms: {
-      version: 'demo-overdraft-1',
+      version: 'demo-overdraft-2',
       currency: 'RUB',
       minAmount: '50000.00',
       maxAmount: '1000000.00',
-      minTermMonths: 1,
+      minTermMonths: 12,
       maxTermMonths: 12,
       annualRatePercent: '26.00',
       minBusinessAgeMonths: 6,
       disbursementDescription:
         'Лимит к расчётному счёту (до 30% среднемесячных поступлений за последние 3 мес.).',
       repaymentDescription:
-        'Автоматически из поступлений на счёт (полное погашение каждого транша — в течение 30 дней).',
+        'Автоматически из поступлений на счёт (полное погашение — в течение 30 дней с первого использования).',
     },
   },
   {
@@ -91,11 +95,11 @@ export const MOCK_PRODUCTS = [
     description:
       'Подойдёт, если финансирование требуется неоднократно, а размер и даты расходов меняются. Банк одобряет общий лимит, из которого вы получаете нужные суммы.',
     terms: {
-      version: 'demo-revolving-line-1',
+      version: 'demo-revolving-line-2',
       currency: 'RUB',
       minAmount: '300000.00',
       maxAmount: '5000000.00',
-      minTermMonths: 3,
+      minTermMonths: 24,
       maxTermMonths: 24,
       annualRatePercent: '23.00',
       minBusinessAgeMonths: 12,
@@ -106,7 +110,7 @@ export const MOCK_PRODUCTS = [
     },
   },
   {
-    code: 'EQUIPMENT',
+    code: 'LONG_TERM',
     name: 'Кредит на длительный срок',
     description:
       'Подойдёт для расходов, результат от которых бизнес будет получать несколько лет: покупки оборудования, ремонта помещения или открытия дополнительной точки.',
@@ -124,12 +128,12 @@ export const MOCK_PRODUCTS = [
     },
   },
   {
-    code: 'GOV_CONTRACT',
+    code: 'GOVERNMENT_CONTRACT_LINE',
     name: 'Кредитная линия на госконтракт',
     description:
       'Подойдёт, если вы уже заключили государственный контракт и нужны деньги на товары, материалы или работы для его исполнения. Средства выдаются частями под расходы по контракту.',
     terms: {
-      version: 'demo-gov-contract-1',
+      version: 'demo-government-contract-line-2',
       currency: 'RUB',
       minAmount: '300000.00',
       maxAmount: '10000000.00',
@@ -145,6 +149,29 @@ export const MOCK_PRODUCTS = [
   },
 ];
 
+const PRODUCT_RULES = {
+  WORKING_CAPITAL: { financialPeriodMonths: 6, financingType: 'TERM_LOAN', repaymentType: 'ANNUITY' },
+  OVERDRAFT: { financialPeriodMonths: 3, financingType: 'OVERDRAFT', repaymentType: 'ACCOUNT_SWEEP',
+    overdraftRules: { maxInflowSharePercent: '30.00', maxDebtPeriodDays: 30 } },
+  REVOLVING_LINE: { financialPeriodMonths: 6, financingType: 'REVOLVING_LINE', repaymentType: 'EQUAL_PRINCIPAL_PER_TRANCHE',
+    revolvingLineRules: { minTrancheTermMonths: 3, maxTrancheTermMonths: 6 } },
+  LONG_TERM: { financialPeriodMonths: 12, financingType: 'TERM_LOAN', repaymentType: 'ANNUITY' },
+  GOVERNMENT_CONTRACT_LINE: { financialPeriodMonths: 12, financingType: 'NON_REVOLVING_LINE', repaymentType: 'CONTRACT_PROCEEDS',
+    governmentContractRules: { maxNetContractSharePercent: '70.00', maxDaysAfterFinalPayment: 30, renewable: false } },
+};
+
+MOCK_PRODUCTS.forEach(product => Object.assign(product.terms, {
+  requiresSettlementAccount: product.code === 'OVERDRAFT',
+  requiresRegularInflow: product.code === 'OVERDRAFT',
+  overdraftRules: null, revolvingLineRules: null, governmentContractRules: null,
+  generalConditions: 'Учебный проект. Условия демонстрационные. Залог, поручительство и обязательная страховка не требуются. Комиссий нет. Отсутствие текущей просрочки обязательно.',
+  ...PRODUCT_RULES[product.code],
+}));
+
+export function storageKey(name) {
+  return `alfa_${apiMode}_${name}`;
+}
+
 const MOCK_USER = {
   user: {
     id: 'b827db91-df42-4d75-b5e0-8f0a7a512ee1',
@@ -155,13 +182,16 @@ const MOCK_USER = {
     name: 'Демо-пекарня',
     legalForm: 'OOO',
     registrationDate: '2019-08-01',
+    countryCode: 'RU',
+    hasSettlementAccount: true,
+    hasRegularInflowLast3Months: true,
   },
   demo: true,
 };
 
 function loadMockApps() {
   try {
-    const raw = localStorage.getItem('alfa_mock_applications');
+    const raw = localStorage.getItem('alfa_mock_applications_v2');
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -169,7 +199,7 @@ function loadMockApps() {
 }
 
 function saveMockApps(apps) {
-  localStorage.setItem('alfa_mock_applications', JSON.stringify(apps));
+  localStorage.setItem('alfa_mock_applications_v2', JSON.stringify(apps));
 }
 
 function computeAllowedActions(status) {
@@ -207,7 +237,7 @@ function evaluateMockApplication(app, forcedOutcome = null) {
       {
         clarificationId: '1f9bd36f-e62b-47cd-a8c3-fc3227fc6893',
         field: 'form.averageMonthlyInflow',
-        /*code: 'ZERO_INFLOW_CONFIRMATION',*/
+        code: 'ZERO_INFLOW_CONFIRMATION',
         message:
           'Подтвердите, что среднемесячные поступления за указанный отчётный период равны нулю, либо исправьте значение.',
         observedValue: '0.00',
@@ -225,7 +255,7 @@ function evaluateMockApplication(app, forcedOutcome = null) {
       decidedAt: new Date().toISOString(),
       reasons: [
         {
-          /*code: 'RISK_ABOVE_LIMIT', */
+          code: 'RISK_THRESHOLD_EXCEEDED',
           message:
             'Оценка риска не соответствует условиям демонстрационной кредитной политики (свободный денежный поток ниже расчётной кредитной нагрузки).',
         },
@@ -274,6 +304,7 @@ async function realFetch(path, options = {}) {
     credentials: 'include',
   });
 
+  if (response.status === 401) sessionPromise = null;
   if (!response.ok) {
     let problem = null;
     try {
@@ -291,37 +322,48 @@ async function realFetch(path, options = {}) {
   return response.json();
 }
 
-export async function initSessionAndGetUser() {
-  if (apiMode === 'mock') {
-    return MOCK_USER;
+async function realCommand(path, body, explicitKey) {
+  const signature = JSON.stringify(body ?? null);
+  let pending = pendingCommands.get(path);
+  if (!pending || pending.signature !== signature || explicitKey && explicitKey !== pending.key) {
+    pending = { signature, key: explicitKey || generateUUID() };
+    pendingCommands.set(path, pending);
   }
-  const csrf1 = await realFetch('/csrf', { method: 'GET' });
-  csrfToken = csrf1.token;
-  csrfHeaderName = csrf1.headerName || 'X-CSRF-TOKEN';
+  try {
+    const result = await realFetch(path, {
+      method: 'POST', headers: { 'Idempotency-Key': pending.key },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    if (pendingCommands.get(path) === pending) pendingCommands.delete(path);
+    return result;
+  } catch (error) {
+    if (error.status >= 400 && error.status < 500 && error.status !== 409 && pendingCommands.get(path) === pending) pendingCommands.delete(path);
+    throw error;
+  }
+}
 
-  await realFetch('/demo/session', { method: 'POST' });
-
-  const csrf2 = await realFetch('/csrf', { method: 'GET' });
-  csrfToken = csrf2.token;
-  csrfHeaderName = csrf2.headerName || 'X-CSRF-TOKEN';
-
-  return realFetch('/me', { method: 'GET' });
+export function initSessionAndGetUser() {
+  if (apiMode === 'mock') return Promise.resolve(MOCK_USER);
+  if (!sessionPromise) {
+    sessionPromise = (async () => {
+      const first = await realFetch('/csrf', { method: 'GET' });
+      csrfToken = first.token;
+      csrfHeaderName = first.headerName || 'X-CSRF-TOKEN';
+      await realFetch('/demo/session', { method: 'POST' });
+      const next = await realFetch('/csrf', { method: 'GET' });
+      csrfToken = next.token;
+      csrfHeaderName = next.headerName || 'X-CSRF-TOKEN';
+      return realFetch('/me', { method: 'GET' });
+    })().catch(error => { sessionPromise = null; throw error; });
+  }
+  return sessionPromise;
 }
 
 export async function fetchProducts() {
   if (apiMode === 'mock') {
     return { items: MOCK_PRODUCTS };
   }
-  const res = await realFetch('/products', { method: 'GET' });
-  // Дополняем каталог, если сервер вернул меньше 5 продуктов
-  const serverItems = res.items || [];
-  const merged = [...serverItems];
-  MOCK_PRODUCTS.forEach((mp) => {
-    if (!merged.some((s) => s.code === mp.code)) {
-      merged.push(mp);
-    }
-  });
-  return { items: merged };
+  return realFetch('/products', { method: 'GET' });
 }
 
 export async function fetchApplications() {
@@ -348,33 +390,39 @@ export async function fetchApplications() {
   return realFetch('/applications?page=0&size=20', { method: 'GET' });
 }
 
-export async function createApplication(productCode) {
+export async function createApplication(productCode, key) {
   if (apiMode === 'mock') {
     const product =
       MOCK_PRODUCTS.find((p) => p.code === productCode) || MOCK_PRODUCTS[0];
     const now = new Date().toISOString();
+    const date = new Date();
+    const months = product.terms.financialPeriodMonths;
+    const start = new Date(Date.UTC(date.getFullYear(), date.getMonth() - months, 1));
+    const end = new Date(Date.UTC(date.getFullYear(), date.getMonth(), 0));
     const newApp = {
       id: generateUUID(),
       version: 0,
       status: 'DRAFT',
       product,
       reportingPeriod: {
-        startDate: '2025-10-01',
-        endDate: '2026-09-30',
-        months: 12,
+        startDate: start.toISOString().slice(0, 10),
+        endDate: end.toISOString().slice(0, 10),
+        months,
       },
       form: {
         amount: product.terms.minAmount,
         termMonths: product.terms.minTermMonths,
         averageMonthlyInflow: '1200000.00',
         averageMonthlyOutflow: '800000.00',
-        equipment:
-          product.code === 'EQUIPMENT'
-            ? { name: 'Пекарская печь конвекционная', purchasePrice: '2000000.00' }
-            : null,
+        financingPurpose: null,
+        projectBudget: null,
+        trancheTermMonths: null,
+        governmentContract: null,
+        cashBalance: null,
       },
       assessmentId: null,
       lastSubmittedAt: null,
+      calculationDate: now.slice(0, 10),
       decision: null,
       requiredInformation: [],
       processingError: null,
@@ -388,11 +436,7 @@ export async function createApplication(productCode) {
     return newApp;
   }
 
-  return realFetch('/applications', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': generateUUID() },
-    body: JSON.stringify({ productCode }),
-  });
+  return realCommand('/applications', { productCode }, key);
 }
 
 export async function fetchApplicationById(applicationId) {
@@ -431,19 +475,7 @@ export async function saveApplicationForm(applicationId, expectedVersion, formPa
         currentVersion: app.version,
       };
     }
-    app.form = {
-      amount: toMoneyString(formPayload.amount),
-      termMonths: formPayload.termMonths ? Number(formPayload.termMonths) : null,
-      averageMonthlyInflow: toMoneyString(formPayload.averageMonthlyInflow),
-      averageMonthlyOutflow: toMoneyString(formPayload.averageMonthlyOutflow),
-      equipment:
-        app.product.code === 'EQUIPMENT'
-          ? {
-              name: formPayload.equipment?.name?.trim() || null,
-              purchasePrice: toMoneyString(formPayload.equipment?.purchasePrice),
-            }
-          : null,
-    };
+    app.form = structuredClone(formPayload);
     app.version += 1;
     app.updatedAt = new Date().toISOString();
     saveMockApps(apps);
@@ -464,7 +496,8 @@ export async function submitApplication(
   expectedVersion,
   expectedProductTermsVersion,
   clarificationResponses = [],
-  mockForcedOutcome = null
+  mockForcedOutcome = null,
+  key
 ) {
   if (apiMode === 'mock') {
     const apps = loadMockApps();
@@ -508,20 +541,19 @@ export async function submitApplication(
         message: 'Укажите среднемесячные расходы',
       });
     }
-    if (app.product.code === 'EQUIPMENT') {
-      if (!app.form.equipment?.name) {
-        errors.push({
-          field: 'form.equipment.name',
-          code: 'REQUIRED',
-          message: 'Укажите цель кредита или наименование оборудования',
-        });
-      }
-      if (!app.form.equipment?.purchasePrice || Number(app.form.equipment.purchasePrice) <= 0) {
-        errors.push({
-          field: 'form.equipment.purchasePrice',
-          code: 'POSITIVE_REQUIRED',
-          message: 'Укажите положительный бюджет покупки или проекта',
-        });
+    if (app.form.cashBalance === null) {
+      errors.push({ field: 'form.cashBalance', code: 'REQUIRED', message: 'Укажите свободные собственные деньги' });
+    }
+    if (app.product.code === 'LONG_TERM') {
+      if (!app.form.financingPurpose) errors.push({ field: 'form.financingPurpose', code: 'REQUIRED', message: 'Укажите цель финансирования' });
+      if (!(Number(app.form.projectBudget) > 0)) errors.push({ field: 'form.projectBudget', code: 'POSITIVE_REQUIRED', message: 'Укажите положительный бюджет проекта' });
+    }
+    if (app.product.code === 'REVOLVING_LINE' && !(app.form.trancheTermMonths >= 3 && app.form.trancheTermMonths <= 6)) {
+      errors.push({ field: 'form.trancheTermMonths', code: 'OUT_OF_RANGE', message: 'Укажите срок транша от 3 до 6 месяцев' });
+    }
+    if (app.product.code === 'GOVERNMENT_CONTRACT_LINE') {
+      for (const field of ['number', 'contractAmount', 'advanceAmount', 'executionEndDate', 'finalPaymentDate']) {
+        if (app.form.governmentContract?.[field] == null || app.form.governmentContract[field] === '') errors.push({ field: `form.governmentContract.${field}`, code: 'REQUIRED', message: 'Заполните сведения о контракте' });
       }
     }
 
@@ -581,18 +613,12 @@ export async function submitApplication(
     };
   }
 
-  return realFetch(`/applications/${applicationId}/submit`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': generateUUID() },
-    body: JSON.stringify({
-      expectedVersion,
-      expectedProductTermsVersion,
-      clarificationResponses,
-    }),
-  });
+  return realCommand(`/applications/${applicationId}/submit`, {
+    expectedVersion, expectedProductTermsVersion, clarificationResponses,
+  }, key);
 }
 
-export async function retryApplication(applicationId, expectedVersion) {
+export async function retryApplication(applicationId, expectedVersion, key) {
   if (apiMode === 'mock') {
     const apps = loadMockApps();
     const app = apps.find((a) => a.id === applicationId);
@@ -616,32 +642,26 @@ export async function retryApplication(applicationId, expectedVersion) {
     };
   }
 
-  return realFetch(`/applications/${applicationId}/retry`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': generateUUID() },
-    body: JSON.stringify({ expectedVersion }),
-  });
+  return realCommand(`/applications/${applicationId}/retry`, { expectedVersion }, key);
 }
 
-export async function initAssistantConversation() {
+export async function initAssistantConversation(key) {
   if (apiMode === 'mock') {
-    const existingId = localStorage.getItem('alfa_mock_conv_id') || generateUUID();
-    localStorage.setItem('alfa_mock_conv_id', existingId);
+    const existingId = localStorage.getItem('alfa_mock_conv_id_v2') || generateUUID();
+    localStorage.setItem('alfa_mock_conv_id_v2', existingId);
     return {
       id: existingId,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
   }
-  return realFetch('/assistant/conversations', {
-    method: 'POST',
-    headers: { 'Idempotency-Key': generateUUID() },
-  });
+  await initSessionAndGetUser();
+  return realCommand('/assistant/conversations', undefined, key);
 }
 
-export async function fetchAssistantMessages(conversationId) {
+export async function fetchAssistantMessages(conversationId, afterSequence = 0) {
   if (apiMode === 'mock') {
-    const raw = localStorage.getItem(`alfa_mock_msgs_${conversationId}`);
+    const raw = localStorage.getItem(`alfa_mock_msgs_v2_${conversationId}`);
     const items = raw ? JSON.parse(raw) : [];
     return {
       items,
@@ -650,14 +670,14 @@ export async function fetchAssistantMessages(conversationId) {
     };
   }
   return realFetch(
-    `/assistant/conversations/${conversationId}/messages?afterSequence=0&limit=50`,
+    `/assistant/conversations/${conversationId}/messages?afterSequence=${afterSequence}&limit=100`,
     { method: 'GET' }
   );
 }
 
-export async function sendAssistantMessage(conversationId, text, context = {}) {
+export async function sendAssistantMessage(conversationId, text, context = {}, key) {
   if (apiMode === 'mock') {
-    const raw = localStorage.getItem(`alfa_mock_msgs_${conversationId}`);
+    const raw = localStorage.getItem(`alfa_mock_msgs_v2_${conversationId}`);
     const items = raw ? JSON.parse(raw) : [];
     const q = text.toLowerCase();
 
@@ -675,7 +695,7 @@ export async function sendAssistantMessage(conversationId, text, context = {}) {
     ) {
       replyText =
         'Для покупки оборудования, ремонта или расширения бизнеса подходит «Кредит на длительный срок» (от 500 тыс. до 5 млн ₽, срок от 24 до 60 мес., ставка 22% годовых). Вы получаете всю сумму сразу и возвращаете равными платежами.';
-      recommendedProductCode = 'EQUIPMENT';
+      recommendedProductCode = 'LONG_TERM';
     } else if (q.includes('овердрафт') || q.includes('позже') || q.includes('недел') || q.includes('30 дн')) {
       replyText =
         'Если нужно провести платёж сейчас, а покупатель перечислит деньги позже, выберите «Овердрафт» (лимит от 50 тыс. до 1 млн ₽, ставка 26% годовых только на использованный остаток, погашение за 30 дней).';
@@ -687,7 +707,7 @@ export async function sendAssistantMessage(conversationId, text, context = {}) {
     } else if (q.includes('госконтракт') || q.includes('44-фз') || q.includes('заказчик') || q.includes('тендер')) {
       replyText =
         'Для исполнения уже заключённого контракта по 44-ФЗ выберите «Кредитную линию на госконтракт» (лимит до 10 млн ₽, до 70% суммы контракта за вычетом аванса, ставка 21% годовых).';
-      recommendedProductCode = 'GOV_CONTRACT';
+      recommendedProductCode = 'GOVERNMENT_CONTRACT_LINE';
     } else if (q.includes('закуп') || q.includes('оборот') || q.includes('товар') || q.includes('сырь')) {
       replyText =
         'Для разовой закупки товаров, сырья или оплаты аренды оптимален «Оборотный кредит» (от 100 тыс. до 3 млн ₽ на срок от 3 до 12 мес., ставка 24% годовых).';
@@ -721,7 +741,7 @@ export async function sendAssistantMessage(conversationId, text, context = {}) {
     };
 
     items.push(userMessage, assistantMessage);
-    localStorage.setItem(`alfa_mock_msgs_${conversationId}`, JSON.stringify(items));
+    localStorage.setItem(`alfa_mock_msgs_v2_${conversationId}`, JSON.stringify(items));
 
     return {
       conversationId,
@@ -730,18 +750,9 @@ export async function sendAssistantMessage(conversationId, text, context = {}) {
     };
   }
 
-  return realFetch(`/assistant/conversations/${conversationId}/messages`, {
-    method: 'POST',
-    headers: { 'Idempotency-Key': generateUUID() },
-    body: JSON.stringify({
-      text,
-      context: {
-        applicationId: context.applicationId || null,
-        productCode: context.productCode || null,
-        fieldCode: context.fieldCode || null,
-      },
-    }),
-  });
+  return realCommand(`/assistant/conversations/${conversationId}/messages`, {
+    text, context: { applicationId: context.applicationId || null, productCode: context.productCode || null, fieldCode: context.fieldCode || null },
+  }, key);
 }
 
 export function forceMockStatus(applicationId, status) {

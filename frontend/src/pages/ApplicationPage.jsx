@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ArrowLeft,
   Save,
@@ -30,193 +30,158 @@ export default function ApplicationPage({
   onFocusField,
   apiMode,
 }) {
-  const [amount, setAmount] = useState('500000');
-  const [termMonths, setTermMonths] = useState(12);
-  const [inflow, setInflow] = useState('1200000');
-  const [outflow, setOutflow] = useState('800000');
-  const [eqName, setEqName] = useState('');
-  const [eqPrice, setEqPrice] = useState('');
-
+  const initial = application.form;
+  const [amount, setAmount] = useState(initial.amount ?? application.product.terms.minAmount);
+  const [termMonths, setTermMonths] = useState(initial.termMonths ?? application.product.terms.minTermMonths);
+  const [inflow, setInflow] = useState(initial.averageMonthlyInflow ?? '');
+  const [outflow, setOutflow] = useState(initial.averageMonthlyOutflow ?? '');
+  const [cashBalance, setCashBalance] = useState(initial.cashBalance ?? '');
+  const [financingPurpose, setFinancingPurpose] = useState(initial.financingPurpose ?? '');
+  const [projectBudget, setProjectBudget] = useState(initial.projectBudget ?? '');
+  const [trancheTermMonths, setTrancheTermMonths] = useState(initial.trancheTermMonths ?? '');
+  const [governmentContract, setGovernmentContract] = useState(initial.governmentContract ?? {});
   const [clarificationMode, setClarificationMode] = useState('CONFIRM_VALUE');
-  const [clarificationComment, setClarificationComment] = useState(
-    'За указанный отчётный период поступлений от деятельности не было.'
-  );
-
+  const [clarificationComment, setClarificationComment] = useState('За указанный отчётный период поступлений от деятельности не было.');
   const [saveState, setSaveState] = useState('saved');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [fieldErrors, setFieldErrors] = useState({});
   const [globalError, setGlobalError] = useState(null);
+  const latest = useRef(application);
+  const saveQueue = useRef(Promise.resolve());
+  const editRevision = useRef(0);
+  const submitting = useRef(false);
+  latest.current = application;
 
-  useEffect(() => {
-    if (!application) return;
-    const { form, product } = application;
-    setAmount(
-      form.amount !== null
-        ? String(Math.round(Number(form.amount)))
-        : String(Math.round(Number(product.terms.minAmount)))
-    );
-    setTermMonths(form.termMonths ?? product.terms.minTermMonths);
-    setInflow(
-      form.averageMonthlyInflow !== null
-        ? String(Math.round(Number(form.averageMonthlyInflow)))
-        : ''
-    );
-    setOutflow(
-      form.averageMonthlyOutflow !== null
-        ? String(Math.round(Number(form.averageMonthlyOutflow)))
-        : ''
-    );
-    setEqName(form.equipment?.name || '');
-    setEqPrice(
-      form.equipment?.purchasePrice
-        ? String(Math.round(Number(form.equipment.purchasePrice)))
-        : ''
-    );
+  const loadForm = useCallback(next => {
+    const form = next.form;
+    setAmount(form.amount ?? next.product.terms.minAmount);
+    setTermMonths(form.termMonths ?? next.product.terms.minTermMonths);
+    setInflow(form.averageMonthlyInflow ?? '');
+    setOutflow(form.averageMonthlyOutflow ?? '');
+    setCashBalance(form.cashBalance ?? '');
+    setFinancingPurpose(form.financingPurpose ?? '');
+    setProjectBudget(form.projectBudget ?? '');
+    setTrancheTermMonths(form.trancheTermMonths ?? '');
+    setGovernmentContract(form.governmentContract ?? {});
     setFieldErrors({});
     setGlobalError(null);
-  }, [application?.id, application?.status]);
+    setSaveState('saved');
+  }, []);
+
+  const applicationId = application.id;
+  const status = application.status;
+  useEffect(() => { loadForm(latest.current); }, [applicationId, status, loadForm]);
 
   useEffect(() => {
-    if (!application || application.status !== 'CHECKING') return;
-
-    const timer = setInterval(async () => {
+    if (status !== 'CHECKING') return;
+    let active = true;
+    let timer;
+    const poll = async () => {
       try {
-        const updated = await fetchApplicationById(application.id);
-        setApplication(updated);
-      } catch {
-        // Игнорируем разовую ошибку сети при опросе
+        const updated = await fetchApplicationById(applicationId);
+        if (active) setApplication(updated);
+      } catch (error) {
+        if (active && error.status === 401) setGlobalError('Сессия завершилась. Обновите страницу и войдите снова.');
       }
-    }, 2000);
+      if (active) timer = setTimeout(poll, 2000);
+    };
+    timer = setTimeout(poll, 2000);
+    return () => { active = false; clearTimeout(timer); };
+  }, [applicationId, status, setApplication]);
 
-    return () => clearInterval(timer);
-  }, [application?.id, application?.status]);
-
-  if (!application) return null;
-
-  const {
-    product,
-    status,
-    reportingPeriod,
-    decision,
-    requiredInformation,
-    processingError,
-  } = application;
+  const { product, reportingPeriod, decision, requiredInformation, processingError } = application;
   const { terms } = product;
   const isEditable = status === 'DRAFT' || status === 'NEEDS_INFO';
   const isNeedsInfo = status === 'NEEDS_INFO';
-
+  const isAnnuity = terms.repaymentType === 'ANNUITY';
+  const markDirty = () => { editRevision.current++; setSaveState('dirty'); };
   const buildFormPayload = () => ({
     amount: toMoneyString(amount),
-    termMonths: termMonths ? Number(termMonths) : null,
+    termMonths: termMonths === '' ? null : Number(termMonths),
     averageMonthlyInflow: toMoneyString(inflow),
     averageMonthlyOutflow: toMoneyString(outflow),
-    equipment:
-      product.code === 'EQUIPMENT'
-        ? {
-            name: eqName.trim() || null,
-            purchasePrice: toMoneyString(eqPrice),
-          }
-        : null,
+    financingPurpose: product.code === 'LONG_TERM' ? financingPurpose.trim() || null : null,
+    projectBudget: product.code === 'LONG_TERM' ? toMoneyString(projectBudget) : null,
+    trancheTermMonths: product.code === 'REVOLVING_LINE' && trancheTermMonths !== '' ? Number(trancheTermMonths) : null,
+    governmentContract: product.code === 'GOVERNMENT_CONTRACT_LINE' ? {
+      lawCode: '44_FZ', number: governmentContract.number?.trim() || null,
+      contractAmount: toMoneyString(governmentContract.contractAmount),
+      advanceAmount: toMoneyString(governmentContract.advanceAmount),
+      executionEndDate: governmentContract.executionEndDate || null,
+      finalPaymentDate: governmentContract.finalPaymentDate || null,
+    } : null,
+    cashBalance: toMoneyString(cashBalance),
   });
 
-  const handleSaveForm = async (silent = false) => {
-    if (!isEditable) return application;
-    setSaveState('saving');
-    if (!silent) {
-      setGlobalError(null);
-      setFieldErrors({});
-    }
+  const showError = error => {
+    setFieldErrors(Object.fromEntries((error.errors || []).map(item => [item.field, item.message])));
+    setGlobalError(error.title || 'Не удалось выполнить запрос. Проверьте соединение и повторите.');
+  };
 
-    try {
-      const updated = await saveApplicationForm(
-        application.id,
-        application.version,
-        buildFormPayload()
-      );
+  const handleSaveForm = async (silent = false) => {
+    if (!isEditable) return latest.current;
+    const body = buildFormPayload();
+    const revision = editRevision.current;
+    const operation = saveQueue.current.then(async () => {
+      const current = latest.current;
+      if (JSON.stringify(body) === JSON.stringify(current.form)) { setSaveState(editRevision.current === revision ? 'saved' : 'dirty'); return current; }
+      setSaveState('saving');
+      if (!silent) { setGlobalError(null); setFieldErrors({}); }
+      const updated = await saveApplicationForm(current.id, current.version, body);
+      latest.current = updated;
       setApplication(updated);
-      setSaveState('saved');
+      setSaveState(editRevision.current === revision ? 'saved' : 'dirty');
       return updated;
-    } catch (err) {
+    });
+    saveQueue.current = operation;
+    try {
+      return await operation;
+    } catch (error) {
       setSaveState('error');
-      if (err?.code === 'VERSION_CONFLICT') {
-        const fresh = await fetchApplicationById(application.id);
-        setApplication(fresh);
-        setGlobalError(
-          'Версия заявки обновилась на сервере. Данные перезагружены.'
-        );
-      } else if (err?.errors) {
-        const map = {};
-        err.errors.forEach((e) => {
-          map[e.field] = e.message;
-        });
-        setFieldErrors(map);
-      } else {
-        setGlobalError(err?.title || 'Не удалось сохранить черновик');
-      }
-      throw err;
+      if (error.code === 'VERSION_CONFLICT') {
+        try {
+          const fresh = await fetchApplicationById(applicationId);
+          latest.current = fresh;
+          setApplication(fresh);
+          loadForm(fresh);
+          setGlobalError('Заявка изменена в другой вкладке. Загружены актуальные данные; внесите свои изменения повторно.');
+        } catch (reloadError) { showError(reloadError); }
+      } else showError(error);
+      throw error;
+    } finally {
+      if (saveQueue.current === operation) saveQueue.current = Promise.resolve();
     }
   };
 
   const handleSubmit = async (mockForcedOutcome = null) => {
-    setIsSubmitting(true);
-    setGlobalError(null);
-    setFieldErrors({});
-
+    if (submitting.current) return;
+    submitting.current = true;
+    setIsSubmitting(true); setGlobalError(null); setFieldErrors({});
     try {
-      const savedApp = await handleSaveForm(true);
-
-      let clarificationResponses = [];
-      if (
-        savedApp.status === 'NEEDS_INFO' &&
-        savedApp.requiredInformation?.length > 0
-      ) {
-        clarificationResponses = savedApp.requiredInformation.map((req) => ({
-          clarificationId: req.clarificationId,
-          response: clarificationMode,
-          comment:
-            clarificationMode === 'CONFIRM_VALUE'
-              ? clarificationComment.trim() || null
-              : null,
-        }));
-      }
-
-      await submitApplication(
-        savedApp.id,
-        savedApp.version,
-        savedApp.product.terms.version,
-        clarificationResponses,
-        mockForcedOutcome
-      );
-
-      const checkingApp = await fetchApplicationById(savedApp.id);
-      setApplication(checkingApp);
-    } catch (err) {
-      if (err?.errors) {
-        const map = {};
-        err.errors.forEach((e) => {
-          map[e.field] = e.message;
-        });
-        setFieldErrors(map);
-      }
-      setGlobalError(err?.title || 'Проверьте заполнение полей перед отправкой');
-    } finally {
-      setIsSubmitting(false);
-    }
+      const saved = await handleSaveForm(true);
+      const responses = saved.status === 'NEEDS_INFO' ? (saved.requiredInformation || []).map(question => ({
+        clarificationId: question.clarificationId, response: clarificationMode,
+        comment: clarificationMode === 'CONFIRM_VALUE' ? clarificationComment.trim() || null : null,
+      })) : [];
+      const accepted = await submitApplication(saved.id, saved.version, saved.product.terms.version, responses, mockForcedOutcome);
+      setApplication({ ...saved, status: accepted.status, version: accepted.version, assessmentId: accepted.assessmentId, allowedActions: [] });
+    } catch (error) { if (error.code !== 'VERSION_CONFLICT') showError(error); }
+    finally { submitting.current = false; setIsSubmitting(false); }
   };
 
   const handleRetry = async () => {
-    setIsSubmitting(true);
-    setGlobalError(null);
+    if (submitting.current) return;
+    submitting.current = true; setIsSubmitting(true); setGlobalError(null);
     try {
-      await retryApplication(application.id, application.version);
-      const updated = await fetchApplicationById(application.id);
-      setApplication(updated);
-    } catch (err) {
-      setGlobalError(err?.title || 'Не удалось запустить повторную проверку');
-    } finally {
-      setIsSubmitting(false);
-    }
+      const accepted = await retryApplication(application.id, application.version);
+      setApplication({ ...application, status: accepted.status, version: accepted.version, assessmentId: accepted.assessmentId, processingError: null, allowedActions: [] });
+    } catch (error) { showError(error); }
+    finally { submitting.current = false; setIsSubmitting(false); }
   };
+
+  const updateContract = (name, value) => { setGovernmentContract(previous => ({ ...previous, [name]: value })); markDirty(); };
+  const saveOnBlur = () => { handleSaveForm(true).catch(() => {}); };
+  const fieldProps = { disabled: !isEditable || isNeedsInfo, onBlur: saveOnBlur, onFocus: onFocusField, errors: fieldErrors };
 
   const numAmount = Number(amount || 0);
   const numTerm = Number(termMonths || 12);
@@ -231,7 +196,7 @@ export default function ApplicationPage({
 
   return (
     <div className="max-w-4xl mx-auto space-y-6 pb-20">
-      {/* Верхняя панель навигации и сохранения */}
+
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-3xl border border-gray-200/90 shadow-xs">
         <div className="flex items-center gap-3">
           <button
@@ -265,7 +230,8 @@ export default function ApplicationPage({
               {saveState === 'error' && 'Ошибка сохранения'}
             </span>
             <button
-              onClick={() => handleSaveForm(false)}
+              onClick={() => handleSaveForm(false).catch(() => {})}
+              disabled={saveState === 'saving' || isSubmitting}
               className="py-2 px-3.5 rounded-xl border border-gray-300 hover:bg-gray-50 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
             >
               <Save className="w-3.5 h-3.5" />
@@ -275,7 +241,7 @@ export default function ApplicationPage({
         )}
       </div>
 
-      {/* ДЕМО-ПУЛЬТ БЫСТРОЙ ПРОВЕРКИ ВСЕХ 6 СТАТУСОВ */}
+
       {apiMode === 'mock' && (
         <div className="bg-[#121214] text-white p-4 rounded-2xl flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2 text-xs font-semibold text-gray-300">
@@ -309,7 +275,7 @@ export default function ApplicationPage({
         </div>
       )}
 
-      {/* 1. Статус CHECKING */}
+
       {status === 'CHECKING' && (
         <div className="bg-white rounded-3xl p-8 border border-blue-200 shadow-xs text-center space-y-5 animate-fadeIn">
           <div className="w-14 h-14 rounded-2xl bg-blue-50 text-blue-600 flex items-center justify-center mx-auto">
@@ -337,7 +303,7 @@ export default function ApplicationPage({
         </div>
       )}
 
-      {/* 2. Статус APPROVED */}
+
       {status === 'APPROVED' && decision && (
         <div className="bg-emerald-50/90 rounded-3xl p-6 sm:p-8 border border-emerald-200 space-y-5 animate-fadeIn">
           <div className="flex items-center gap-3">
@@ -391,7 +357,7 @@ export default function ApplicationPage({
         </div>
       )}
 
-      {/* 3. Статус DECLINED */}
+
       {status === 'DECLINED' && decision && (
         <div className="bg-red-50/90 rounded-3xl p-6 sm:p-8 border border-red-200 space-y-5 animate-fadeIn">
           <div className="flex items-center gap-3">
@@ -428,7 +394,7 @@ export default function ApplicationPage({
         </div>
       )}
 
-      {/* 4. Статус TECHNICAL_HOLD */}
+
       {status === 'TECHNICAL_HOLD' && (
         <div className="bg-orange-50 rounded-3xl p-6 sm:p-8 border border-orange-200 space-y-4 animate-fadeIn">
           <div className="flex items-center gap-3">
@@ -461,7 +427,7 @@ export default function ApplicationPage({
         </div>
       )}
 
-      {/* 5. Статус NEEDS_INFO */}
+
       {isNeedsInfo && requiredInformation?.length > 0 && (
         <div className="bg-amber-50 rounded-3xl p-6 border border-amber-300 space-y-4 animate-fadeIn">
           <div className="flex items-start gap-3">
@@ -545,7 +511,7 @@ export default function ApplicationPage({
         </div>
       )}
 
-      {/* ФОРМА ЗАЯВКИ */}
+
       <div className="bg-white rounded-3xl p-6 sm:p-8 border border-gray-200/90 shadow-xs space-y-6">
         <div className="flex items-center justify-between border-b border-gray-100 pb-4">
           <div>
@@ -562,11 +528,11 @@ export default function ApplicationPage({
           </div>
         </div>
 
-        {/* 1. Сумма кредита */}
+
         <div className="space-y-2">
           <div className="flex justify-between items-baseline">
             <label className="text-sm font-semibold text-gray-800">
-              Сумма кредита (₽)
+              {terms.financingType === 'TERM_LOAN' ? 'Сумма кредита (₽)' : 'Запрашиваемый лимит (₽)'}
             </label>
             <span className="text-xs text-gray-500">
               от {formatRubles(terms.minAmount)} до {formatRubles(terms.maxAmount)}
@@ -575,13 +541,15 @@ export default function ApplicationPage({
           <input
             type="number"
             disabled={!isEditable || isNeedsInfo}
+            aria-label="Сумма или лимит"
+            step="0.01"
             value={amount}
             onFocus={() => onFocusField?.('form.amount')}
             onChange={(e) => {
               setAmount(e.target.value);
-              setSaveState('dirty');
+              markDirty();
             }}
-            onBlur={() => handleSaveForm(true)}
+            onBlur={saveOnBlur}
             className="w-full px-4 py-3 rounded-xl border border-gray-300 font-semibold text-base focus:outline-none focus:border-[#EF3124] disabled:bg-gray-100"
           />
           <input
@@ -593,9 +561,9 @@ export default function ApplicationPage({
             value={numAmount}
             onChange={(e) => {
               setAmount(e.target.value);
-              setSaveState('dirty');
+              markDirty();
             }}
-            onMouseUp={() => handleSaveForm(true)}
+            onMouseUp={saveOnBlur}
             className="w-full cursor-pointer"
           />
           {fieldErrors['form.amount'] && (
@@ -605,11 +573,11 @@ export default function ApplicationPage({
           )}
         </div>
 
-        {/* 2. Срок кредита */}
+
         <div className="space-y-2">
           <div className="flex justify-between items-baseline">
             <label className="text-sm font-semibold text-gray-800">
-              Срок кредита (в месяцах)
+              {terms.financingType === 'TERM_LOAN' ? 'Срок кредита (в месяцах)' : 'Срок действия лимита (в месяцах)'}
             </label>
             <span className="text-xs text-gray-500">
               от {terms.minTermMonths} до {terms.maxTermMonths} мес.
@@ -618,13 +586,14 @@ export default function ApplicationPage({
           <input
             type="number"
             disabled={!isEditable || isNeedsInfo}
+            aria-label="Срок кредита или лимита"
             value={termMonths}
             onFocus={() => onFocusField?.('form.termMonths')}
             onChange={(e) => {
               setTermMonths(e.target.value);
-              setSaveState('dirty');
+              markDirty();
             }}
-            onBlur={() => handleSaveForm(true)}
+            onBlur={saveOnBlur}
             className="w-full px-4 py-3 rounded-xl border border-gray-300 font-semibold text-base focus:outline-none focus:border-[#EF3124] disabled:bg-gray-100"
           />
           <input
@@ -636,9 +605,9 @@ export default function ApplicationPage({
             value={numTerm}
             onChange={(e) => {
               setTermMonths(Number(e.target.value));
-              setSaveState('dirty');
+              markDirty();
             }}
-            onMouseUp={() => handleSaveForm(true)}
+            onMouseUp={saveOnBlur}
             className="w-full cursor-pointer"
           />
           {fieldErrors['form.termMonths'] && (
@@ -648,7 +617,7 @@ export default function ApplicationPage({
           )}
         </div>
 
-        {/* 3. Доходы и расходы */}
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
           <div className="space-y-1.5">
             <label className="text-sm font-semibold text-gray-800">
@@ -657,13 +626,15 @@ export default function ApplicationPage({
             <input
               type="number"
               disabled={!isEditable}
+              aria-label="Среднемесячные поступления"
+              step="0.01"
               value={inflow}
               onFocus={() => onFocusField?.('form.averageMonthlyInflow')}
               onChange={(e) => {
                 setInflow(e.target.value);
-                setSaveState('dirty');
+                markDirty();
               }}
-              onBlur={() => handleSaveForm(true)}
+              onBlur={saveOnBlur}
               placeholder="Например, 1200000"
               className={`w-full px-4 py-3 rounded-xl border font-semibold text-sm focus:outline-none ${
                 isNeedsInfo
@@ -672,7 +643,7 @@ export default function ApplicationPage({
               } disabled:bg-gray-100`}
             />
             <p className="text-[11px] text-gray-500">
-              Укажите 0, чтобы проверить сценарий NEEDS_INFO
+              Поступления от деятельности за указанный период, делённые на число месяцев. Не включайте новые кредиты, вложения собственника и внутренние переводы.
             </p>
             {fieldErrors['form.averageMonthlyInflow'] && (
               <p className="text-xs text-[#EF3124] font-medium">
@@ -688,13 +659,15 @@ export default function ApplicationPage({
             <input
               type="number"
               disabled={!isEditable || isNeedsInfo}
+              aria-label="Среднемесячные расходы"
+              step="0.01"
               value={outflow}
               onFocus={() => onFocusField?.('form.averageMonthlyOutflow')}
               onChange={(e) => {
                 setOutflow(e.target.value);
-                setSaveState('dirty');
+                markDirty();
               }}
-              onBlur={() => handleSaveForm(true)}
+              onBlur={saveOnBlur}
               placeholder="Например, 800000"
               className="w-full px-4 py-3 rounded-xl border border-gray-300 font-semibold text-sm focus:outline-none focus:border-[#EF3124] disabled:bg-gray-100"
             />
@@ -706,76 +679,57 @@ export default function ApplicationPage({
           </div>
         </div>
 
-        {/* 4. Блок оборудования */}
-        {product.code === 'EQUIPMENT' && (
-          <div className="p-5 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-4">
-            <div className="text-xs font-bold uppercase tracking-wider text-purple-800">
-              Сведения о приобретаемом оборудовании
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-700">
-                  Наименование оборудования
-                </label>
-                <input
-                  type="text"
-                  disabled={!isEditable || isNeedsInfo}
-                  value={eqName}
-                  onFocus={() => onFocusField?.('form.equipment.name')}
-                  onChange={(e) => {
-                    setEqName(e.target.value);
-                    setSaveState('dirty');
-                  }}
-                  onBlur={() => handleSaveForm(true)}
-                  placeholder="Например: Печь хлебопекарная"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-gray-300 text-sm focus:outline-none focus:border-[#EF3124] disabled:bg-gray-100"
-                />
-                {fieldErrors['form.equipment.name'] && (
-                  <p className="text-xs text-[#EF3124] font-medium">
-                    {fieldErrors['form.equipment.name']}
-                  </p>
-                )}
-              </div>
 
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-gray-700">
-                  Стоимость оборудования (₽)
-                </label>
-                <input
-                  type="number"
-                  disabled={!isEditable || isNeedsInfo}
-                  value={eqPrice}
-                  onFocus={() =>
-                    onFocusField?.('form.equipment.purchasePrice')
-                  }
-                  onChange={(e) => {
-                    setEqPrice(e.target.value);
-                    setSaveState('dirty');
-                  }}
-                  onBlur={() => handleSaveForm(true)}
-                  placeholder="Например: 600000"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-gray-300 text-sm focus:outline-none focus:border-[#EF3124] disabled:bg-gray-100"
-                />
-                {fieldErrors['form.equipment.purchasePrice'] && (
-                  <p className="text-xs text-[#EF3124] font-medium">
-                    {fieldErrors['form.equipment.purchasePrice']}
-                  </p>
-                )}
-              </div>
+        <ApplicationField field="form.cashBalance" label="Свободные собственные деньги (₽)" type="number"
+          value={cashBalance} onChange={value => { setCashBalance(value); markDirty(); }} {...fieldProps} />
+        <p className="text-[11px] text-gray-500">Доступные собственные средства до нового кредита. Неизвестное значение оставьте пустым; настоящий ноль укажите как 0.</p>
+
+        {product.code === 'LONG_TERM' && (
+          <div className="p-5 rounded-2xl bg-purple-50/50 border border-purple-200/80 space-y-4">
+            <div className="text-xs font-bold uppercase tracking-wider text-purple-800">Цель финансирования и бюджет проекта</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <ApplicationField field="form.financingPurpose" label="Цель финансирования" value={financingPurpose}
+                onChange={value => { setFinancingPurpose(value); markDirty(); }} {...fieldProps} />
+              <ApplicationField field="form.projectBudget" label="Бюджет проекта (₽)" type="number" value={projectBudget}
+                onChange={value => { setProjectBudget(value); markDirty(); }} {...fieldProps} />
             </div>
           </div>
         )}
+        {product.code === 'REVOLVING_LINE' && (
+          <div className="p-5 rounded-2xl bg-emerald-50/50 border border-emerald-200/80 space-y-4">
+            <ApplicationField field="form.trancheTermMonths" label="Срок отдельного транша (месяцы)" type="number" value={trancheTermMonths}
+              min={terms.revolvingLineRules?.minTrancheTermMonths} max={terms.revolvingLineRules?.maxTrancheTermMonths} step="1"
+              onChange={value => { setTrancheTermMonths(value); markDirty(); }} {...fieldProps} />
+            <p className="text-[11px] text-gray-500">Срок транша {terms.revolvingLineRules?.minTrancheTermMonths}–{terms.revolvingLineRules?.maxTrancheTermMonths} месяцев и не позднее конца линии. Срок линии указан выше отдельно.</p>
+          </div>
+        )}
+        {product.code === 'GOVERNMENT_CONTRACT_LINE' && (
+          <div className="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-200/80 space-y-4">
+            <div className="text-xs font-bold uppercase tracking-wider text-indigo-800">Заключённый государственный контракт по 44-ФЗ</div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              {[
+                ['number', 'Номер контракта', 'text'],
+                ['contractAmount', 'Стоимость контракта (₽)', 'number'],
+                ['advanceAmount', 'Аванс (₽)', 'number'],
+                ['executionEndDate', 'Дата завершения исполнения', 'date'],
+                ['finalPaymentDate', 'Дата окончательной оплаты', 'date'],
+              ].map(([name, label, type]) => <ApplicationField key={name} field={`form.governmentContract.${name}`} label={label} type={type}
+                value={governmentContract[name] ?? ''} onChange={value => updateContract(name, value)} {...fieldProps} />)}
+            </div>
+            <p className="text-[11px] text-gray-500">Лимит до {terms.governmentContractRules?.maxNetContractSharePercent}% от стоимости за вычетом аванса. Возврат долга не восстанавливает лимит.</p>
+          </div>
+        )}
 
-        {/* Финансовая сводка */}
+
         <div className="bg-gray-50 p-4 rounded-2xl border border-gray-200/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div className="flex items-center gap-2.5">
             <TrendingUp className="w-5 h-5 text-[#EF3124]" />
             <div className="text-xs">
               <div className="text-gray-500">
-                Ориентировочный платёж по графику:
+                {isAnnuity ? 'Ориентировочный платёж по графику:' : 'Погашение по условиям продукта:'}
               </div>
               <div className="text-base font-bold text-gray-900">
-                ~ {formatRubles(estMonthlyPayment)} / мес.
+                {isAnnuity ? `~ ${formatRubles(estMonthlyPayment)} / мес.` : terms.repaymentDescription}
               </div>
             </div>
           </div>
@@ -786,7 +740,7 @@ export default function ApplicationPage({
             </div>
             <div
               className={`text-base font-bold ${
-                netCashflow >= estMonthlyPayment
+                netCashflow >= (isAnnuity ? estMonthlyPayment : 0)
                   ? 'text-emerald-700'
                   : 'text-amber-700'
               }`}
@@ -822,4 +776,13 @@ export default function ApplicationPage({
       </div>
     </div>
   );
+}
+function ApplicationField({ field, label, type = 'text', value, onChange, onBlur, onFocus, errors, disabled, min, max, step = '0.01' }) {
+  return <div className="space-y-1.5">
+    <label htmlFor={field} className="text-sm font-semibold text-gray-800">{label}</label>
+    <input id={field} type={type} step={type === 'number' ? step : undefined} min={min} max={max} disabled={disabled} value={value}
+      onChange={event => onChange(event.target.value)} onBlur={onBlur} onFocus={() => onFocus?.(field)}
+      className="w-full px-4 py-3 rounded-xl border border-gray-300 font-semibold text-sm focus:outline-none focus:border-[#EF3124] disabled:bg-gray-100" />
+    {errors[field] && <p className="text-xs text-[#EF3124] font-medium">{errors[field]}</p>}
+  </div>;
 }

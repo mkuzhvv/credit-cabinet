@@ -1,0 +1,19 @@
+{
+  "schemaVersion": "1",
+  "companyId": "58dd3ac1-9622-4be8-92cb-4ed38371a32b",
+  "source": "DEMO_BKI",
+  "sourceVersion": "demo-credit-history-v1",
+  "profile": {
+    "status": "NO_HISTORY",
+    "asOfDate": "2026-10-24",
+    "delinquencyPeriod": {
+      "startDate": "2025-10-01",
+      "endDate": "2026-09-30",
+      "months": 12
+    },
+    "totalOutstandingDebt": null,
+    "monthlyDebtPayment": null,
+    "overdueDebtAmount": null,
+    "maxDaysPastDueLast12Months": null
+  }
+}

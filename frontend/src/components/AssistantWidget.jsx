@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Bot,
   Send,
@@ -12,6 +12,7 @@ import {
   initAssistantConversation,
   fetchAssistantMessages,
   sendAssistantMessage,
+  generateUUID,
 } from '../api/client';
 
 const QUICK_PROMPTS = [
@@ -22,6 +23,10 @@ const QUICK_PROMPTS = [
 ];
 
 export default function AssistantWidget({
+  enabled = false,
+  apiMode,
+  products = [],
+  userId,
   applicationId = null,
   productCode = null,
   focusedFieldCode = null,
@@ -29,84 +34,89 @@ export default function AssistantWidget({
 }) {
   const [isOpen, setIsOpen] = useState(false);
 
-  const [conversationId, setConversationId] = useState(() =>
-    localStorage.getItem('alfa_conversation_id')
-  );
+  const conversationKey = `alfa_${apiMode}_${userId}_conversation_id`;
+  const conversation = useRef(localStorage.getItem(conversationKey));
+  const creating = useRef(null);
+  const sending = useRef(false);
+  const pendingMessage = useRef(null);
   const [messages, setMessages] = useState([]);
   const [inputText, setInputText] = useState('');
   const [isSending, setIsSending] = useState(false);
+  const [loadingHistory, setLoadingHistory] = useState(true);
   const [errorText, setErrorText] = useState(null);
   const chatEndRef = useRef(null);
 
-  useEffect(() => {
-    async function setupChat() {
-      try {
-        let convId = conversationId;
-        if (!convId) {
-          const conv = await initAssistantConversation();
-          convId = conv.id;
-          setConversationId(convId);
-          localStorage.setItem('alfa_conversation_id', convId);
-        }
-        const history = await fetchAssistantMessages(convId);
-        setMessages(history.items || []);
-      } catch {
-        // Если сервер ещё не запущен, список сообщений остаётся пустым
-      }
+  const ensureConversation = useCallback(async () => {
+    if (conversation.current) return conversation.current;
+    if (!creating.current) {
+      creating.current = initAssistantConversation().then(created => {
+        conversation.current = created.id;
+        localStorage.setItem(conversationKey, created.id);
+        return created.id;
+      }).finally(() => { creating.current = null; });
     }
-    setupChat();
-  }, []);
+    return creating.current;
+  }, [conversationKey]);
 
   useEffect(() => {
-    if (isOpen) {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-    }
+    if (!enabled) return;
+    let active = true;
+    setLoadingHistory(true);
+    const load = async () => {
+      try {
+        let id = await ensureConversation();
+        if (!active) return;
+        let page;
+        try { page = await fetchAssistantMessages(id); }
+        catch (error) {
+          if (!active) return;
+          if (error.status !== 404) throw error;
+          conversation.current = null; localStorage.removeItem(conversationKey);
+          id = await ensureConversation(); page = await fetchAssistantMessages(id);
+        }
+        const history = [...page.items];
+        while (page.hasMore && active) {
+          page = await fetchAssistantMessages(id, page.lastSequence);
+          history.push(...page.items);
+        }
+        if (active) { setMessages(history); setErrorText(null); }
+      } catch (error) { if (active) setErrorText(error.title || 'Не удалось загрузить диалог. Попробуйте отправить сообщение ещё раз.'); }
+      finally { if (active) setLoadingHistory(false); }
+    };
+    load();
+    return () => { active = false; };
+  }, [enabled, ensureConversation, conversationKey]);
+
+  useEffect(() => {
+    if (isOpen) chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isOpen]);
 
-  const handleSend = async (customText) => {
-    const textToSend = (customText ?? inputText).trim();
-    if (!textToSend || isSending) return;
-
-    setErrorText(null);
-    setIsSending(true);
+  const handleSend = async customText => {
+    const text = (customText ?? inputText).trim();
+    if (!enabled || loadingHistory || !text || sending.current) return;
+    sending.current = true; setIsSending(true); setErrorText(null);
     if (!customText) setInputText('');
-
+    const context = { applicationId, productCode, fieldCode: focusedFieldCode };
+    const signature = JSON.stringify({ text, context });
+    if (pendingMessage.current?.signature !== signature) pendingMessage.current = { signature, key: generateUUID() };
     try {
-      let convId = conversationId;
-      if (!convId) {
-        const conv = await initAssistantConversation();
-        convId = conv.id;
-        setConversationId(convId);
-        localStorage.setItem('alfa_conversation_id', convId);
-      }
-
-      const exchange = await sendAssistantMessage(convId, textToSend, {
-        applicationId,
-        productCode,
-        fieldCode: focusedFieldCode,
-      });
-
-      setMessages((prev) => [
-        ...prev,
-        exchange.userMessage,
-        exchange.assistantMessage,
-      ]);
-    } catch (err) {
-      if (!customText) setInputText(textToSend);
-      setErrorText(
-        err?.title || 'Помощник временно недоступен. Попробуйте повторить запрос.'
-      );
-    } finally {
-      setIsSending(false);
-    }
+      const id = await ensureConversation();
+      const exchange = await sendAssistantMessage(id, text, context, pendingMessage.current.key);
+      pendingMessage.current = null;
+      setMessages(previous => [...previous, exchange.userMessage, exchange.assistantMessage]);
+    } catch (error) {
+      if (error.status === 404) { conversation.current = null; localStorage.removeItem(conversationKey); }
+      if (!customText) setInputText(text);
+      setErrorText(error.title || 'Помощник временно недоступен. Повторите запрос.');
+    } finally { sending.current = false; setIsSending(false); }
   };
 
   return (
     <div className="fixed bottom-6 right-6 z-50">
       {isOpen ? (
-        /* РАСКРЫТОЕ ОКНО ЧАТА (закрывается только на крестик в шапке окна) */
+
         <div className="w-[calc(100vw-2rem)] sm:w-[390px] bg-white rounded-3xl border border-gray-200 shadow-2xl flex flex-col overflow-hidden animate-fadeIn">
-          {/* Шапка помощника с крестиком закрытия */}
+
           <div className="bg-[#121214] text-white p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-9 h-9 rounded-xl bg-[#EF3124] flex items-center justify-center shrink-0">
@@ -131,7 +141,7 @@ export default function AssistantWidget({
             </button>
           </div>
 
-          {/* Быстрые вопросы */}
+
           <div className="p-3.5 bg-gray-50 border-b border-gray-100">
             <div className="text-[11px] font-semibold text-gray-500 mb-2 flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-[#EF3124]" />
@@ -142,7 +152,7 @@ export default function AssistantWidget({
                 <button
                   key={prompt}
                   onClick={() => handleSend(prompt)}
-                  disabled={isSending}
+                  disabled={!enabled || loadingHistory || isSending}
                   className="text-left text-[11px] bg-white hover:bg-red-50/60 hover:border-[#EF3124]/40 text-gray-700 px-2.5 py-1.5 rounded-xl border border-gray-200 transition-all cursor-pointer disabled:opacity-50"
                 >
                   {prompt}
@@ -151,7 +161,7 @@ export default function AssistantWidget({
             </div>
           </div>
 
-          {/* История сообщений */}
+
           <div className="p-4 space-y-3 h-72 overflow-y-auto bg-white">
             {messages.length === 0 ? (
               <div className="text-center py-8 px-4 text-gray-400 text-xs space-y-2">
@@ -187,9 +197,7 @@ export default function AssistantWidget({
                       >
                         <span>
                           Оформить «
-                          {msg.recommendedProductCode === 'EQUIPMENT'
-                            ? 'Кредит на оборудование'
-                            : 'Оборотный кредит'}
+                          {products.find(product => product.code === msg.recommendedProductCode)?.name || 'Выбранный продукт'}
                           »
                         </span>
                         <ArrowRight className="w-3.5 h-3.5" />
@@ -202,14 +210,14 @@ export default function AssistantWidget({
             <div ref={chatEndRef} />
           </div>
 
-          {/* Ошибка генерации */}
+
           {errorText && (
             <div className="px-4 py-2 bg-red-50 text-red-700 text-xs border-t border-red-100">
               {errorText}
             </div>
           )}
 
-          {/* Поле ввода вопроса */}
+
           <form
             onSubmit={(e) => {
               e.preventDefault();
@@ -227,7 +235,7 @@ export default function AssistantWidget({
             />
             <button
               type="submit"
-              disabled={isSending || !inputText.trim()}
+              disabled={!enabled || loadingHistory || isSending || !inputText.trim()}
               className="p-2.5 rounded-xl bg-[#EF3124] hover:bg-[#D92B1E] text-white disabled:opacity-50 transition-all cursor-pointer"
             >
               {isSending ? (
@@ -239,7 +247,7 @@ export default function AssistantWidget({
           </form>
         </div>
       ) : (
-        /* КНОПКА ОТКРЫТИЯ ПОМОЩНИКА (видна только когда окно закрыто) */
+
         <button
           onClick={() => setIsOpen(true)}
           title="Открыть ИИ-помощника"

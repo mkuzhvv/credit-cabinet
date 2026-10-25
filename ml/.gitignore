@@ -1,0 +1,53 @@
+# Local environment files; keep configuration templates
+.env
+.env.*
+!.env.example
+!.env.*.example
+
+# Python environments and caches
+.venv/
+venv/
+__pycache__/
+*.py[cod]
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+.tox/
+.nox/
+.eggs/
+*.egg-info/
+.coverage
+.coverage.*
+htmlcov/
+
+# Editor files and local output
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+*.log
+logs/
+tmp/
+
+# Downloaded models and serialized ML artifacts
+*.gguf
+*.safetensors
+*.onnx
+*.pt
+*.pth
+*.pkl
+*.joblib
+pytorch_model*.bin
+.ollama/
+
+# Local datasets and backups
+SBAnational.csv
+scoring-before-rules-*/
+
+# Local request created from the backend integration example
+/scoring/request.json
