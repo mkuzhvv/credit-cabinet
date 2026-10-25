@@ -1,0 +1,13 @@
+{
+  "status": "NO_HISTORY",
+  "asOfDate": "2026-10-24",
+  "delinquencyPeriod": {
+    "startDate": "2025-10-01",
+    "endDate": "2026-09-30",
+    "months": 12
+  },
+  "totalOutstandingDebt": null,
+  "monthlyDebtPayment": null,
+  "overdueDebtAmount": null,
+  "maxDaysPastDueLast12Months": null
+}
