@@ -1,6 +1,6 @@
 # Схема БД
 
-Принятые решения для MVP, обновлено 24.10.2026. PostgreSQL, 10 таблиц. Документ задаёт схему для последующей реализации SQL-миграций Flyway; миграции и JPA-сущности ещё не созданы.
+Принятые решения для MVP, обновлено 24.10.2026. PostgreSQL, 10 таблиц. Начальная схема реализована в `backend/src/main/resources/db/migration/V1__create_schema.sql`. JPA-сущности добавляются по мере реализации сценариев.
 
 Основа: [архитектура](BACKEND_ARCHITECTURE.md), [сценарии](BACKEND_SCENARIOS.md), [кредитная политика](CREDIT_POLICY_AND_ML_REQUIREMENTS.md), [кредитный профиль](CREDIT_HISTORY.md), [Backend API 0.4.0](contracts/backend.openapi.yaml), [Scoring API 0.3.0](contracts/scoring.openapi.yaml) и [контракт LLM](contracts/llm/README.md).
 
@@ -345,14 +345,14 @@ PK и `UNIQUE` уже создают индексы. Дополнительны�
 
 | Таблица и ключ | Условие индекса | Запрос |
 |---|---|---|
-| `credit_application(company_id, created_at DESC, id DESC)` | — | Список заявок компании от новых к старым |
+| `credit_application(company_id, updated_at DESC, id DESC)` | — | Список заявок компании по порядку Backend API |
 | `credit_assessment(next_run_at, id)` | `processing_status = 'READY'` | Очередная доступная попытка |
 | `credit_assessment(locked_until)` | `processing_status = 'RUNNING'` | Истёкшие захваты обработки |
 | `idempotency_record(expires_at)` | `status IN ('SUCCEEDED','RETRYABLE_FAILURE')` | Очистка завершённых записей с заданным сроком |
 
 Для чтения карточки, текущей попытки, диалога и ключа команды достаточно PK/уникальных индексов. Индексы очереди не содержат `now()`: сравнение со временем находится в запросе.
 
-При существенном объёме выборок по состоянию добавляется `credit_application(company_id, status, created_at DESC, id DESC)`. До измерений отдельные индексы на статус, суммы, риск и каждый FK не создаются. Индексы не решают N+1: списки читаются DTO-проекциями, карточка — с целевой загрузкой текущей попытки, без всей истории.
+При существенном объёме выборок по состоянию добавляется `credit_application(company_id, status, updated_at DESC, id DESC)`. До измерений отдельные индексы на статус, суммы, риск и каждый FK не создаются. Индексы не решают N+1: списки читаются DTO-проекциями, карточка — с целевой загрузкой текущей попытки, без всей истории.
 
 ## 6. Транзакции и фоновая обработка
 
