@@ -1,0 +1,59 @@
+{
+  "WORKING_CAPITAL": {
+    "annualRatePercent": "24.00",
+    "minAmount": "100000.00",
+    "maxAmount": "3000000.00",
+    "minTermMonths": 3,
+    "maxTermMonths": 12,
+    "minimumBusinessAgeMonths": 6,
+    "financialPeriodMonths": 6,
+    "repayment": "ANNUITY"
+  },
+  "OVERDRAFT": {
+    "annualRatePercent": "26.00",
+    "minAmount": "50000.00",
+    "maxAmount": "1000000.00",
+    "minTermMonths": 12,
+    "maxTermMonths": 12,
+    "minimumBusinessAgeMonths": 6,
+    "financialPeriodMonths": 3,
+    "repayment": "OVERDRAFT",
+    "inflowLimitFraction": "0.30",
+    "debtDays": 30,
+    "dayCountBasis": 365
+  },
+  "REVOLVING_LINE": {
+    "annualRatePercent": "23.00",
+    "minAmount": "300000.00",
+    "maxAmount": "5000000.00",
+    "minTermMonths": 24,
+    "maxTermMonths": 24,
+    "minimumBusinessAgeMonths": 12,
+    "financialPeriodMonths": 6,
+    "repayment": "DIFFERENTIATED",
+    "minTrancheMonths": 3,
+    "maxTrancheMonths": 6
+  },
+  "LONG_TERM": {
+    "annualRatePercent": "22.00",
+    "minAmount": "500000.00",
+    "maxAmount": "5000000.00",
+    "minTermMonths": 24,
+    "maxTermMonths": 60,
+    "minimumBusinessAgeMonths": 12,
+    "financialPeriodMonths": 12,
+    "repayment": "ANNUITY"
+  },
+  "GOVERNMENT_CONTRACT_LINE": {
+    "annualRatePercent": "21.00",
+    "minAmount": "300000.00",
+    "maxAmount": "10000000.00",
+    "minTermMonths": 1,
+    "maxTermMonths": 12,
+    "minimumBusinessAgeMonths": 12,
+    "financialPeriodMonths": 12,
+    "repayment": "BULLET",
+    "contractLimitFraction": "0.70",
+    "paymentGraceDays": 30
+  }
+}

@@ -1,0 +1,20 @@
+{
+  "model": "qwen3.5:9b-q4_K_M",
+  "model_digest": "56671c2ab9385f9cfcb404638e32cd62d88e3501d44822208363c010179a3c90",
+  "prompt_version": "assistant-v5.0.0",
+  "input_schema_version": "2",
+  "output_schema_version": "1",
+  "num_ctx": 12288,
+  "num_predict": 512,
+  "temperature": 0,
+  "seed": 42,
+  "think": false,
+  "keep_alive": "10m",
+  "timeout_seconds": 180,
+  "tokenizer_repo": "Qwen/Qwen3.5-9B",
+  "tokenizer_path": ".cache/qwen35-tokenizer.json",
+  "framing_reserve_tokens": 512,
+  "tokenizer_metadata_path": "tokenizer_metadata-qwen35.json",
+  "presence_penalty": 0,
+  "repeat_penalty": 1.0
+}
