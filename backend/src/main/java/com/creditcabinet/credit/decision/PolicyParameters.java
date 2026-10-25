@@ -12,11 +12,11 @@ public record PolicyParameters(String policyVersion, int featureSchemaVersion, S
         if (policyVersion.isBlank() || expectedModelVersion.isBlank()) {
             throw new IllegalArgumentException("Версии политики и модели обязательны");
         }
-        if (featureSchemaVersion != 3) {
-            throw new IllegalArgumentException("Поддерживается схема признаков 3");
+        if (featureSchemaVersion != 4) {
+            throw new IllegalArgumentException("Поддерживается схема признаков 4");
         }
-        if (riskCutoff.signum() < 0 || riskCutoff.compareTo(BigDecimal.ONE) > 0) {
-            throw new IllegalArgumentException("Порог риска должен быть в диапазоне [0, 1]");
+        if (riskCutoff.compareTo(new BigDecimal("0.50")) != 0) {
+            throw new IllegalArgumentException("Формальная политика схемы 4 использует порог 0.50");
         }
     }
 }

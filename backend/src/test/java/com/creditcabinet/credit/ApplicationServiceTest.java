@@ -6,6 +6,8 @@ import java.time.ZoneOffset;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.UUID;
+import jakarta.persistence.EntityManagerFactory;
+import org.hibernate.SessionFactory;
 
 import com.creditcabinet.credit.api.CreateApplicationRequest;
 import com.creditcabinet.credit.api.SaveFormRequest;
@@ -53,7 +55,10 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:postgresql://127.0.0.1:5432/credit_cabinet",
-        "spring.datasource.username=credit_cabinet", "spring.datasource.password="
+        "spring.datasource.username=credit_cabinet", "spring.datasource.password=", "credit.processing.enabled=false",
+        "spring.jpa.properties.hibernate.generate_statistics=true",
+        "logging.level.org.hibernate.orm.statistics=OFF",
+        "logging.level.org.hibernate.engine.internal.StatisticalLoggingSessionEventListener=OFF"
 })
 @AutoConfigureMockMvc
 @TestExecutionListeners({ServletTestExecutionListener.class, DependencyInjectionTestExecutionListener.class})
@@ -72,8 +77,20 @@ class ApplicationServiceTest {
     @Autowired private JdbcTemplate jdbc;
     @Autowired private ApplicationService service;
     @Autowired private PlatformTransactionManager transactions;
+    @Autowired private EntityManagerFactory entityManagerFactory;
     private final Set<UUID> applicationIds = new HashSet<>();
     private final Set<UUID> keys = new HashSet<>();
+
+    @Test
+    void readsApplicationPageInTwoQueriesWithoutLoadingRowsIndividually() throws Exception {
+        for (int i = 0; i < 6; i++) {
+            create("WORKING_CAPITAL", UUID.randomUUID());
+        }
+        var statistics = entityManagerFactory.unwrap(SessionFactory.class).getStatistics();
+        statistics.clear();
+        call(get(PATH).param("size", "100")).andExpect(status().isOk());
+        assertThat(statistics.getPrepareStatementCount()).isEqualTo(2);
+    }
 
     @AfterEach
     void removeOwnRecords() {
@@ -99,9 +116,11 @@ class ApplicationServiceTest {
         assertThat(draft.path("reportingPeriod").path("endDate").asString()).isEqualTo("2026-09-30");
         ObjectNode form = (ObjectNode) draft.path("form").deepCopy();
         form.put("amount", "500000.00");
+        form.put("cashBalance", "1000000.00");
         JsonNode saved = read(save(id, 0, form).andExpect(status().isOk()));
         assertThat(saved.path("version").asLong()).isEqualTo(1);
         assertThat(saved.path("form").path("amount").asString()).isEqualTo("500000.00");
+        assertThat(saved.path("form").path("cashBalance").asString()).isEqualTo("1000000.00");
         assertThat(read(call(get(PATH + "/" + id)).andExpect(status().isOk()))).isEqualTo(saved);
         assertThat(create("WORKING_CAPITAL", key)).isEqualTo(draft);
         assertThat(jdbc.queryForObject("SELECT count(*) FROM application_event WHERE application_id = ?", Long.class, id)).isEqualTo(1);
@@ -109,8 +128,10 @@ class ApplicationServiceTest {
                 .content("{\"productCode\":\"OVERDRAFT\"}"))
                 .andExpect(status().isConflict()).andExpect(jsonPath("$.code").value("IDEMPOTENCY_KEY_REUSED"));
         form.putNull("amount");
+        form.putNull("cashBalance");
         save(id, 1, form).andExpect(status().isOk()).andExpect(jsonPath("$.version").value(2));
         assertThat(read(call(get(PATH + "/" + id)).andExpect(status().isOk())).path("form").path("amount").isNull()).isTrue();
+        assertThat(read(call(get(PATH + "/" + id)).andExpect(status().isOk())).path("form").path("cashBalance").isNull()).isTrue();
     }
 
     @ParameterizedTest

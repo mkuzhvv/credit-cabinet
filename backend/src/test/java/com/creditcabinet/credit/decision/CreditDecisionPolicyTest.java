@@ -21,7 +21,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class CreditDecisionPolicyTest {
 
     private static final Instant DECIDED_AT = Instant.parse("2026-10-25T10:00:00Z");
-    private static final PolicyParameters PARAMETERS = new PolicyParameters("test-policy-v1", 3, "test-model-v3", money("0.30"));
+    private static final PolicyParameters PARAMETERS = new PolicyParameters("test-policy-v4", 4, "test-model-v4", money("0.50"));
     private final CreditDecisionPolicy policy = new CreditDecisionPolicy();
 
     @ParameterizedTest
@@ -71,9 +71,9 @@ class CreditDecisionPolicyTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"0,APPROVED", "0.299999999999999999,APPROVED", "0.300000000000000000,DECLINED", "0.300000000000000001,DECLINED", "1,DECLINED"})
-    void appliesStrictRiskBoundaryWithoutRounding(String risk, CreditDecision.Type expected) {
-        CreditDecision result = policy.decideByRisk(context("WORKING_CAPITAL"), PARAMETERS, new RiskEstimate(3, "test-model-v3", money(risk)), DECIDED_AT);
+    @CsvSource({"0,APPROVED", "1,DECLINED"})
+    void appliesBinaryResultAtFixedCutoff(String risk, CreditDecision.Type expected) {
+        CreditDecision result = policy.decideByRisk(context("WORKING_CAPITAL"), PARAMETERS, new RiskEstimate(4, "test-model-v4", money(risk)), DECIDED_AT);
         assertThat(result.type()).isEqualTo(expected);
         assertThat(result.decidedAt()).isEqualTo(DECIDED_AT);
         if (expected == CreditDecision.Type.DECLINED) {
@@ -86,7 +86,7 @@ class CreditDecisionPolicyTest {
     @ValueSource(strings = {"WORKING_CAPITAL", "OVERDRAFT", "REVOLVING_LINE", "LONG_TERM", "GOVERNMENT_CONTRACT_LINE"})
     void buildsApprovalFromReviewedTerms(String code) {
         SubmissionContext input = context(code);
-        var result = policy.decideByRisk(input, PARAMETERS, new RiskEstimate(3, "test-model-v3", money("0.10")), DECIDED_AT);
+        var result = policy.decideByRisk(input, PARAMETERS, new RiskEstimate(4, "test-model-v4", money("0")), DECIDED_AT);
         assertThat(result.terms().amount()).isEqualByComparingTo(input.form().amount());
         assertThat(result.terms().annualRatePercent()).isEqualByComparingTo(input.terms().annualRatePercent());
         assertThat(result.terms().financingType()).isEqualTo(input.terms().financingType());
@@ -100,7 +100,7 @@ class CreditDecisionPolicyTest {
         SubmissionContext original = context("WORKING_CAPITAL");
         SubmissionContext later = new SubmissionContext(original.productCode(), original.terms(), original.form(),
                 original.calculationDate(), original.reportingPeriod(), LocalDate.of(2027, 1, 31));
-        var approval = policy.decideByRisk(later, PARAMETERS, new RiskEstimate(3, "test-model-v3", money("0.10")), DECIDED_AT);
+        var approval = policy.decideByRisk(later, PARAMETERS, new RiskEstimate(4, "test-model-v4", money("0")), DECIDED_AT);
         assertThat(approval.terms().plannedEndDate()).isEqualTo(LocalDate.of(2027, 4, 30));
         var reason = policy.checkCompany(new CompanyFacts(DATE, true, true), DATE, original.terms()).orElseThrow();
         CreditDecision decline = policy.decline(reason, DECIDED_AT);
@@ -111,14 +111,20 @@ class CreditDecisionPolicyTest {
 
     @Test
     void invalidRiskOrVersionIsTechnicalFailureInsteadOfDecision() {
-        for (String risk : Arrays.asList(null, "-0.01", "1.01")) {
-            RiskEstimate estimate = new RiskEstimate(3, "test-model-v3", risk == null ? null : money(risk));
+        for (String risk : Arrays.asList(null, "-0.01", "0.10", "0.50", "1.01")) {
+            RiskEstimate estimate = new RiskEstimate(4, "test-model-v4", risk == null ? null : money(risk));
             assertThatThrownBy(() -> policy.decideByRisk(context("WORKING_CAPITAL"), PARAMETERS, estimate, DECIDED_AT))
                     .isInstanceOf(InvalidRiskEstimateException.class);
         }
         assertThatThrownBy(() -> policy.decideByRisk(context("WORKING_CAPITAL"), PARAMETERS,
-                new RiskEstimate(2, "test-model-v3", money("0.10")), DECIDED_AT)).isInstanceOf(InvalidRiskEstimateException.class);
+                new RiskEstimate(3, "test-model-v4", money("0")), DECIDED_AT)).isInstanceOf(InvalidRiskEstimateException.class);
         assertThatThrownBy(() -> policy.decideByRisk(context("WORKING_CAPITAL"), PARAMETERS,
-                new RiskEstimate(3, "another-model", money("0.10")), DECIDED_AT)).isInstanceOf(InvalidRiskEstimateException.class);
+                new RiskEstimate(4, "another-model", money("0")), DECIDED_AT)).isInstanceOf(InvalidRiskEstimateException.class);
+    }
+
+    @Test
+    void rejectsOldSchemaAndNonFormalCutoff() {
+        assertThatThrownBy(() -> new PolicyParameters("test", 3, "test-model", money("0.50"))).isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> new PolicyParameters("test", 4, "test-model", money("0.30"))).isInstanceOf(IllegalArgumentException.class);
     }
 }

@@ -2,12 +2,11 @@ openapi: 3.1.1
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Credit Cabinet — Backend API
-  version: 0.4.0
-  description: 'Контракт Java для фронта: пять демонстрационных продуктов, форма с применимыми полями, финансовый период
-    3/6/12 месяцев и фиксированная calculationDate. Сессия cookie и CSRF. Кредитная история автоматически из локального
-    источника; текущая просрочка даёт отказ до ML. Продуктовые правила и допущения: ../CREDIT_POLICY_AND_ML_REQUIREMENTS.md.
-    Реальная выдача и обслуживание траншей не реализуются; решение означает одобренные демонстрационные условия, не перечисление
-    денег.'
+  version: 0.5.0
+  description: 'Контракт Java для фронта: пять демонстрационных продуктов, полная форма с cashBalance,
+    фиксированные calculationDate/reportingPeriod. cashBalance — свободные собственные деньги до нового кредита;
+    null допустим в черновике, неизвестное значение не заменяется нулём. Cookie/CSRF.
+    Формальная проверка Python схемы 4. Реальная выдача не реализуется; условия демонстрационные.'
 servers:
 - url: /api/v1
   description: Один origin через frontend proxy / общий reverse proxy.
@@ -377,6 +376,7 @@ paths:
                   projectBudget: null
                   trancheTermMonths: null
                   governmentContract: null
+                  cashBalance: null
                 assessmentId: null
                 lastSubmittedAt: null
                 decision: null
@@ -556,6 +556,7 @@ paths:
                     projectBudget: null
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
               revolving_line:
                 value:
                   expectedVersion: 0
@@ -568,6 +569,7 @@ paths:
                     projectBudget: null
                     trancheTermMonths: 3
                     governmentContract: null
+                    cashBalance: '1000000.00'
               long_term:
                 value:
                   expectedVersion: 0
@@ -580,6 +582,7 @@ paths:
                     projectBudget: '600000.00'
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
               government_contract_line:
                 value:
                   expectedVersion: 0
@@ -598,6 +601,7 @@ paths:
                       advanceAmount: '200000.00'
                       executionEndDate: '2027-04-15'
                       finalPaymentDate: '2027-04-30'
+                    cashBalance: '1000000.00'
               working_capital:
                 value:
                   expectedVersion: 0
@@ -610,6 +614,7 @@ paths:
                     projectBudget: null
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
       description: Только DRAFT и NEEDS_INFO. Все ключи form обязательны; null очищает поле. В NEEDS_INFO изменяются
         только запрошенные поля; остальные передаются без изменений. Сохранение не разрешает вопрос и не запускает рассмотрение.
         Для продолжения нужен submit с clarificationResponses. Исходный вопрос и его clarificationId остаются доступны
@@ -673,6 +678,7 @@ paths:
                   projectBudget: null
                   trancheTermMonths: null
                   governmentContract: null
+                  cashBalance: '1000000.00'
                 assessmentId: null
                 lastSubmittedAt: null
                 decision: null
@@ -955,8 +961,8 @@ paths:
                 - id: 9fd9f28f-285a-4447-bb2d-37f21b18c82a
                   sequence: 2
                   role: ASSISTANT
-                  text: Для покупки печи подходит кредит на оборудование. Откройте условия этого продукта.
-                  recommendedProductCode: EQUIPMENT
+                  text: Для покупки печи на несколько лет подойдёт кредит на длительный срок. Ознакомьтесь с его условиями.
+                  recommendedProductCode: LONG_TERM
                   replyToMessageId: 2ba1c7a6-c071-4698-bce2-5925d6fde109
                   createdAt: '2026-10-22T10:00:03Z'
                 lastSequence: 2
@@ -1027,8 +1033,8 @@ paths:
                   id: 9fd9f28f-285a-4447-bb2d-37f21b18c82a
                   sequence: 2
                   role: ASSISTANT
-                  text: Для покупки печи подходит кредит на оборудование. Откройте условия этого продукта.
-                  recommendedProductCode: EQUIPMENT
+                  text: Для покупки печи на несколько лет подойдёт кредит на длительный срок. Ознакомьтесь с его условиями.
+                  recommendedProductCode: LONG_TERM
                   replyToMessageId: 2ba1c7a6-c071-4698-bce2-5925d6fde109
                   createdAt: '2026-10-22T10:00:03Z'
         '400':
@@ -1779,6 +1785,11 @@ components:
           anyOf:
           - $ref: '#/components/schemas/GovernmentContractForm'
           - type: 'null'
+        cashBalance:
+          anyOf:
+          - $ref: '#/components/schemas/Money'
+          - type: 'null'
+          description: Подтверждённый свободный денежный остаток до нового финансирования. Не включает сумму нового кредита, заложенные или недоступные деньги; неизвестный остаток нельзя заменять нулём.
       required:
       - amount
       - termMonths
@@ -1788,9 +1799,8 @@ components:
       - projectBudget
       - trancheTermMonths
       - governmentContract
-      description: 'Полная замена формы: все ключи присутствуют, null очищает поле. LONG_TERM использует financingPurpose/projectBudget,
-        REVOLVING_LINE — trancheTermMonths, GOVERNMENT_CONTRACT_LINE — governmentContract; неприменимые поля null. amount
-        — сумма либо лимит; termMonths — срок кредита/линии. Расчётная дата и финансовый период определяются сервером.'
+      - cashBalance
+      description: 'Полная замена формы: все ключи присутствуют, null очищает поле. LONG_TERM использует financingPurpose/projectBudget, REVOLVING_LINE — trancheTermMonths, GOVERNMENT_CONTRACT_LINE — governmentContract; неприменимые поля null. amount — сумма либо лимит; termMonths — срок кредита/линии. Расчётная дата и финансовый период определяются сервером. cashBalance обязателен как ключ: null допустим в черновике, при submit требуется известная неотрицательная сумма.'
     CreateApplicationRequest:
       type: object
       additionalProperties: false
@@ -2853,6 +2863,22 @@ components:
                       finalPaymentDate:
                         type: string
                         format: date
+      - if:
+          properties:
+            status:
+              enum:
+              - CHECKING
+              - TECHNICAL_HOLD
+              - APPROVED
+              - DECLINED
+          required:
+          - status
+        then:
+          properties:
+            form:
+              properties:
+                cashBalance:
+                  $ref: '#/components/schemas/Money'
       description: В DRAFT/NEEDS_INFO product содержит актуальные условия для следующей отправки; в остальных состояниях
         — снимок условий последней попытки. version меняется и при переходах состояния. allowedActions — разрешённые
         операции, не гарантия валидности формы или одобрения.
@@ -2987,6 +3013,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: null
         lastSubmittedAt: null
         decision: null
@@ -3044,6 +3071,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -3099,6 +3127,7 @@ components:
           projectBudget: '600000.00'
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 36f3f1b9-93bd-44ed-b806-564aa2c54ef7
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -3162,6 +3191,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -3221,6 +3251,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -3280,6 +3311,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -3339,6 +3371,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision: null
@@ -3398,6 +3431,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -3467,6 +3501,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -3527,6 +3562,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: null
         lastSubmittedAt: null
         decision: null
@@ -3588,6 +3624,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: null
         lastSubmittedAt: null
         decision: null
@@ -3649,6 +3686,7 @@ components:
           projectBudget: null
           trancheTermMonths: 3
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: null
         lastSubmittedAt: null
         decision: null
@@ -3706,6 +3744,7 @@ components:
           projectBudget: '600000.00'
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: null
         lastSubmittedAt: null
         decision: null
@@ -3775,6 +3814,7 @@ components:
             advanceAmount: '200000.00'
             executionEndDate: '2027-04-15'
             finalPaymentDate: '2027-04-30'
+          cashBalance: '1000000.00'
         assessmentId: null
         lastSubmittedAt: null
         decision: null
@@ -3832,6 +3872,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -3896,6 +3937,7 @@ components:
           projectBudget: null
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: 71b03990-acdb-5ee6-9f50-31aca81edaf5
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -3971,6 +4013,7 @@ components:
           projectBudget: null
           trancheTermMonths: 3
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: faef1799-2a90-5d43-97ae-3842eebd345c
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -4041,6 +4084,7 @@ components:
           projectBudget: '600000.00'
           trancheTermMonths: null
           governmentContract: null
+          cashBalance: '1000000.00'
         assessmentId: fc2a5caf-3d1a-52de-8609-dc68ad5ac32c
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:
@@ -4122,6 +4166,7 @@ components:
             advanceAmount: '200000.00'
             executionEndDate: '2027-04-15'
             finalPaymentDate: '2027-04-30'
+          cashBalance: '1000000.00'
         assessmentId: e302092b-3631-569e-8a7e-dca39710f480
         lastSubmittedAt: '2026-10-22T10:02:00Z'
         decision:

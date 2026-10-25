@@ -18,7 +18,7 @@ public class OpenApiConfig {
     OpenAPI backendOpenApi() {
         return new OpenAPI().info(new Info()
                 .title("Credit Cabinet — Backend API")
-                .version("0.4.0")
+                .version("0.5.0")
                 .description("Описание реализованных операций. Нормативный контракт: docs/contracts/backend.openapi.yaml."))
                 .components(new Components()
                         .addSecuritySchemes("SessionCookie", new SecurityScheme().type(SecurityScheme.Type.APIKEY)
@@ -49,6 +49,13 @@ public class OpenApiConfig {
             if (form != null && form.getPut() != null) {
                 form.getPut().setSecurity(List.of(new SecurityRequirement()
                         .addList("SessionCookie").addList("CsrfToken")));
+            }
+            for (String path : List.of("/api/v1/assistant/conversations", "/api/v1/assistant/conversations/{conversationId}/messages")) {
+                var assistant = api.getPaths().get(path);
+                if (assistant != null && assistant.getPost() != null) {
+                    assistant.getPost().setSecurity(List.of(new SecurityRequirement()
+                            .addList("SessionCookie").addList("CsrfToken")));
+                }
             }
         };
     }

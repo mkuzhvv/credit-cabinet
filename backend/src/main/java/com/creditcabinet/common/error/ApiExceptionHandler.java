@@ -10,6 +10,9 @@ import com.creditcabinet.common.idempotency.IdempotencyConflictException;
 import com.creditcabinet.config.RequestIdFilter;
 import com.creditcabinet.credit.service.ApplicationConflictException;
 import com.creditcabinet.credit.service.ApplicationNotFoundException;
+import com.creditcabinet.credit.service.ClarificationException;
+import com.creditcabinet.assistant.service.AssistantException;
+import com.creditcabinet.assistant.service.AssistantNotFoundException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.jspecify.annotations.Nullable;
 import org.slf4j.Logger;
@@ -105,7 +108,22 @@ public class ApiExceptionHandler {
 
     @ExceptionHandler(ApplicationConflictException.class)
     public ResponseEntity<ProblemDetail> applicationConflict(ApplicationConflictException ex, HttpServletRequest request) {
-        return response(problems.create(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), request), request);
+        ProblemDetail problem = problems.create(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), request);
+        if (ex.getCurrentProductTermsVersion() != null) {
+            problem.setProperty("currentProductTermsVersion", ex.getCurrentProductTermsVersion());
+        }
+        return response(problem, request);
+    }
+
+    @ExceptionHandler(ClarificationException.class)
+    public ResponseEntity<ProblemDetail> clarification(ClarificationException ex, HttpServletRequest request) {
+        HttpStatus status = ex.getCode().equals("CLARIFICATION_STALE") ? HttpStatus.CONFLICT : HttpStatus.UNPROCESSABLE_CONTENT;
+        return response(problems.create(status, ex.getCode(), ex.getMessage(), request), request);
+    }
+
+    @ExceptionHandler(AssistantException.class)
+    public ResponseEntity<ProblemDetail> assistant(AssistantException ex, HttpServletRequest request) {
+        return response(problems.create(ex.getStatus(), ex.getCode(), ex.getMessage(), request), request);
     }
 
     @ExceptionHandler(OptimisticLockingFailureException.class)
@@ -119,7 +137,7 @@ public class ApiExceptionHandler {
         return response(problems.create(HttpStatus.CONFLICT, ex.getCode(), ex.getMessage(), request), request);
     }
 
-    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class, ApplicationNotFoundException.class})
+    @ExceptionHandler({NoResourceFoundException.class, NoHandlerFoundException.class, ApplicationNotFoundException.class, AssistantNotFoundException.class})
     public ResponseEntity<ProblemDetail> notFound(HttpServletRequest request) {
         return response(problems.create(HttpStatus.NOT_FOUND, "NOT_FOUND", "Ресурс не найден", request), request);
     }

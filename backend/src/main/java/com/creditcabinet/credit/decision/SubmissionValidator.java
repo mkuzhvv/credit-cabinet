@@ -37,6 +37,7 @@ public class SubmissionValidator {
         boolean validTerm = term(issues, "form.termMonths", form.termMonths(), terms.minTermMonths(), terms.maxTermMonths());
         boolean validInflow = money(issues, "form.averageMonthlyInflow", form.averageMonthlyInflow(), false);
         money(issues, "form.averageMonthlyOutflow", form.averageMonthlyOutflow(), false);
+        money(issues, "form.cashBalance", form.cashBalance(), false);
         validatePeriod(input, issues);
 
         switch (input.productCode()) {

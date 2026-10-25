@@ -3,6 +3,8 @@ package com.creditcabinet.catalog.model;
 import java.math.BigDecimal;
 
 import com.creditcabinet.common.json.MoneyJson;
+import com.creditcabinet.common.json.PercentageDeserializer;
+import tools.jackson.databind.annotation.JsonDeserialize;
 import com.fasterxml.jackson.annotation.JsonFormat;
 import io.swagger.v3.oas.annotations.media.Schema;
 
@@ -13,7 +15,8 @@ public record ProductTerms(
         @MoneyJson @Schema(type = "string", example = "3000000.00") BigDecimal maxAmount,
         int minTermMonths,
         int maxTermMonths,
-        @JsonFormat(shape = JsonFormat.Shape.STRING) @Schema(type = "string", example = "24.00") BigDecimal annualRatePercent,
+        @JsonFormat(shape = JsonFormat.Shape.STRING) @JsonDeserialize(using = PercentageDeserializer.class)
+        @Schema(type = "string", example = "24.00") BigDecimal annualRatePercent,
         int minBusinessAgeMonths,
         int financialPeriodMonths,
         String financingType,
@@ -28,7 +31,7 @@ public record ProductTerms(
         String generalConditions) {
 
     public record OverdraftRules(
-            @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal maxInflowSharePercent,
+            @JsonFormat(shape = JsonFormat.Shape.STRING) @JsonDeserialize(using = PercentageDeserializer.class) BigDecimal maxInflowSharePercent,
             int maxDebtPeriodDays) {
     }
 
@@ -36,7 +39,7 @@ public record ProductTerms(
     }
 
     public record GovernmentContractRules(
-            @JsonFormat(shape = JsonFormat.Shape.STRING) BigDecimal maxNetContractSharePercent,
+            @JsonFormat(shape = JsonFormat.Shape.STRING) @JsonDeserialize(using = PercentageDeserializer.class) BigDecimal maxNetContractSharePercent,
             int maxDaysAfterFinalPayment, boolean renewable) {
     }
 }

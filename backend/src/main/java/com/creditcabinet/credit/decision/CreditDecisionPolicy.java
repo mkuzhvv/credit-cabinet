@@ -81,11 +81,11 @@ public class CreditDecisionPolicy {
                 || !parameters.expectedModelVersion().equals(estimate.modelVersion())) {
             throw new InvalidRiskEstimateException("Версия схемы или модели не соответствует закреплённой политике");
         }
-        if (risk == null || risk.signum() < 0 || risk.compareTo(BigDecimal.ONE) > 0) {
-            throw new InvalidRiskEstimateException("Оценка риска должна присутствовать и находиться в диапазоне [0, 1]");
+        if (risk == null || (risk.compareTo(BigDecimal.ZERO) != 0 && risk.compareTo(BigDecimal.ONE) != 0)) {
+            throw new InvalidRiskEstimateException("Результат формальной проверки должен быть равен 0 или 1");
         }
         if (risk.compareTo(parameters.riskCutoff()) >= 0) {
-            return decline(new DecisionReason("RISK_THRESHOLD_EXCEEDED", "Оценка риска достигла или превысила установленный порог"), decidedAt);
+            return decline(new DecisionReason("RISK_THRESHOLD_EXCEEDED", "Не пройдена формальная проверка платёжеспособности"), decidedAt);
         }
         ProductTerms terms = input.terms();
         ApprovedTerms approved = new ApprovedTerms(input.form().amount(), terms.currency(), input.form().termMonths(),

@@ -2,10 +2,10 @@ openapi: 3.1.1
 jsonSchemaDialect: https://json-schema.org/draft/2020-12/schema
 info:
   title: Credit Cabinet — Scoring API
-  version: 0.3.0
-  description: Внутренний Java ↔ Python HTTP-контракт. Схема признаков 3 поддерживает пять продуктов, период 3/6/12 месяцев
-    и продуктовые признаки. Java применяет обязательные правила, включая отсутствие текущей просрочки, до ML. Python
-    выполняет preprocessing и оценку риска; не принимает кредитное решение. Реальный артефакт и порог подтверждает ML-команда.
+  version: 0.4.0
+  description: 'Внутренний Java ↔ Python контракт формальной проверки ликвидности. Схема 4: пять продуктов, cashBalance, периоды
+    и кредитная история. Алгоритм cashflow-v1 возвращает бинарный riskScore 0/1; обученной модели нет. Java сохраняет обязательные
+    проверки и применяет фиксированный порог 0.5.'
 servers:
 - url: http://scoring:8000
   description: Внутренняя Docker-сеть; порт не публикуется браузеру.
@@ -49,8 +49,8 @@ paths:
                 $ref: '#/components/schemas/ReadyView'
               example:
                 status: READY
-                modelVersion: demo-risk-v3
-                featureSchemaVersion: '3'
+                modelVersion: rules-cashflow-v1-59fdb57552ca
+                featureSchemaVersion: '4'
                 supportedProductCodes:
                 - WORKING_CAPITAL
                 - OVERDRAFT
@@ -64,10 +64,9 @@ paths:
       operationId: assessCreditRisk
       summary: Синхронно оценить сохранённые признаки
       description: Бюджет HTTP-вызова 10 секунд. Модель загружена до readiness; не загружать её на каждом запросе. Операция
-        не меняет заявку и не принимает кредитное решение. Повтор assessmentId с теми же признаками безопасен; повтор
-        вычисления допускается. Java проверяет совпадение assessmentId, featureSchemaVersion и ожидаемую modelVersion,
-        применяет результат только к актуальной попытке и фиксирует его однократно. applicationId — корреляция, не право
-        доступа к БД.
+        не меняет заявку и не принимает кредитное решение. Повтор assessmentId с теми же признаками безопасен; повтор вычисления
+        допускается. Java проверяет совпадение assessmentId, featureSchemaVersion и ожидаемую modelVersion, применяет результат
+        только к актуальной попытке и фиксирует его однократно. applicationId — корреляция, не право доступа к БД.
       requestBody:
         required: true
         content:
@@ -79,7 +78,7 @@ paths:
                 value:
                   assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
                   applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: WORKING_CAPITAL
                     currency: RUB
@@ -107,11 +106,12 @@ paths:
                     projectBudget: null
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
               overdraft:
                 value:
                   assessmentId: 71b03990-acdb-5ee6-9f50-31aca81edaf5
                   applicationId: 18058978-e887-5c5c-acb6-0c4589b9d9a0
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: OVERDRAFT
                     currency: RUB
@@ -139,11 +139,12 @@ paths:
                     projectBudget: null
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
               revolving_line:
                 value:
                   assessmentId: faef1799-2a90-5d43-97ae-3842eebd345c
                   applicationId: 61d25ecc-4fe3-5cff-bc35-106d16b43c94
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: REVOLVING_LINE
                     currency: RUB
@@ -171,11 +172,12 @@ paths:
                     projectBudget: null
                     trancheTermMonths: 3
                     governmentContract: null
+                    cashBalance: '1000000.00'
               long_term:
                 value:
                   assessmentId: fc2a5caf-3d1a-52de-8609-dc68ad5ac32c
                   applicationId: ab47a197-f74d-509f-99c5-2d83597cd6b3
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: LONG_TERM
                     currency: RUB
@@ -203,11 +205,12 @@ paths:
                     projectBudget: '600000.00'
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
               government_contract_line:
                 value:
                   assessmentId: e302092b-3631-569e-8a7e-dca39710f480
                   applicationId: 08ad82b7-7c1c-5ed9-828e-8e21ac02ac32
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: GOVERNMENT_CONTRACT_LINE
                     currency: RUB
@@ -240,11 +243,12 @@ paths:
                       executionEndDate: '2027-04-15'
                       finalPaymentDate: '2027-04-30'
                       plannedEndDate: '2027-04-22'
+                    cashBalance: '1000000.00'
               no_history:
                 value:
                   assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
                   applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: WORKING_CAPITAL
                     currency: RUB
@@ -272,11 +276,12 @@ paths:
                     projectBudget: null
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
               past_delinquency:
                 value:
                   assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
                   applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: WORKING_CAPITAL
                     currency: RUB
@@ -304,11 +309,12 @@ paths:
                     projectBudget: null
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
               confirmed_zero_inflow:
                 value:
                   assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
                   applicationId: 7be0c0bf-9019-47e0-a6b1-67548f1038f2
-                  featureSchemaVersion: '3'
+                  featureSchemaVersion: '4'
                   features:
                     productCode: WORKING_CAPITAL
                     currency: RUB
@@ -336,6 +342,7 @@ paths:
                     projectBudget: null
                     trancheTermMonths: null
                     governmentContract: null
+                    cashBalance: '1000000.00'
       responses:
         '200':
           description: Оценка получена; низкий или высокий риск не меняет HTTP-статус.
@@ -350,9 +357,9 @@ paths:
                 $ref: '#/components/schemas/ScoringResponse'
               example:
                 assessmentId: 8de449ef-d46c-4a0d-b108-e37d3b00bd94
-                featureSchemaVersion: '3'
-                modelVersion: demo-risk-v3
-                riskScore: 0.18
+                featureSchemaVersion: '4'
+                modelVersion: rules-cashflow-v1-59fdb57552ca
+                riskScore: 0.0
         '400':
           $ref: '#/components/responses/BadRequest'
         '422':
@@ -379,8 +386,8 @@ components:
       minLength: 4
       maxLength: 15
       pattern: ^(0|[1-9][0-9]{0,11})\.[0-9]{2}$
-      description: Неотрицательная сумма в рублях, ровно две цифры после точки. Java BigDecimal / Python Decimal. Это
-        технический диапазон, не лимит продукта.
+      description: Неотрицательная сумма в рублях, ровно две цифры после точки. Java BigDecimal / Python Decimal. Это технический
+        диапазон, не лимит продукта.
     PositiveMoney:
       type: string
       minLength: 4
@@ -428,9 +435,9 @@ components:
       - startDate
       - endDate
       - months
-      description: 'Полные календарные месяцы до месяца calculationDate черновика; границы включительно. Число месяцев
-        определяет продукт: OVERDRAFT=3, WORKING_CAPITAL/REVOLVING_LINE=6, LONG_TERM/GOVERNMENT_CONTRACT_LINE=12. Период
-        фиксируется сервером и не сдвигается при submit/retry.'
+      description: 'Полные календарные месяцы до месяца calculationDate черновика; границы включительно. Число месяцев определяет
+        продукт: OVERDRAFT=3, WORKING_CAPITAL/REVOLVING_LINE=6, LONG_TERM/GOVERNMENT_CONTRACT_LINE=12. Период фиксируется
+        сервером и не сдвигается при submit/retry.'
     FieldIssue:
       type: object
       additionalProperties: false
@@ -520,8 +527,8 @@ components:
       - startDate
       - endDate
       - months
-      description: 12 полных календарных месяцев перед месяцем creditHistory.asOfDate; границы включительно. Период не
-        обязан совпадать с reportingPeriod анкеты. Соответствие календарных границ проверяют Java и Python.
+      description: 12 полных календарных месяцев перед месяцем creditHistory.asOfDate; границы включительно. Период не обязан
+        совпадать с reportingPeriod анкеты. Соответствие календарных границ проверяют Java и Python.
     CreditHistory:
       type: object
       additionalProperties: false
@@ -546,8 +553,8 @@ components:
           anyOf:
           - $ref: '#/components/schemas/Money'
           - type: 'null'
-          description: Сумма ежемесячных платежей по действующим кредитным обязательствам в отчёте на asOfDate. Это не
-            дополнительный расход к averageMonthlyOutflow; существующие обязательства уже входят в расходы.
+          description: Сумма ежемесячных платежей по действующим кредитным обязательствам в отчёте на asOfDate. Это не дополнительный
+            расход к averageMonthlyOutflow; существующие обязательства уже входят в расходы.
         overdueDebtAmount:
           anyOf:
           - $ref: '#/components/schemas/Money'
@@ -558,8 +565,8 @@ components:
           - integer
           - 'null'
           minimum: 0
-          description: Максимальное число полных дней просрочки, наблюдавшееся в delinquencyPeriod. Длительная просрочка
-            может начаться до этого периода. При отсутствии просрочек в полной истории — 0.
+          description: Максимальное число полных дней просрочки, наблюдавшееся в delinquencyPeriod. Длительная просрочка может
+            начаться до этого периода. При отсутствии просрочек в полной истории — 0.
       required:
       - status
       - asOfDate
@@ -602,11 +609,11 @@ components:
               type: 'null'
             maxDaysPastDueLast12Months:
               type: 'null'
-      description: Проверка успешно завершена. AVAILABLE означает наличие полных согласованных сведений за период, а
-        не положительную историю. NO_HISTORY означает отсутствие записей; все четыре показателя равны null, статус кодируется
-        моделью отдельно и не подменяется хорошей историей или автоматически нулевым риском. При недоступности, неполном
-        или некорректном отчёте Java не вызывает скоринг. Проверку принадлежности компании, источника и даты получения
-        выполняет Java; их технические метаданные не являются признаками модели.
+      description: Проверка успешно завершена. AVAILABLE означает наличие полных согласованных сведений за период, а не положительную
+        историю. NO_HISTORY означает отсутствие записей; все четыре показателя равны null, статус сохраняется отдельно и не
+        подменяется хорошей историей или автоматическим одобрением. Правило текущей просрочки не нарушено; денежные ограничения
+        остаются обязательными. При недоступности, неполном или некорректном отчёте Java не вызывает скоринг. Проверку принадлежности
+        компании, источника и даты получения выполняет Java; их технические метаданные не входят в формулу.
     ScoringFeatures:
       type: object
       additionalProperties: false
@@ -631,9 +638,9 @@ components:
         asOfDate:
           type: string
           format: date
-          description: UTC-дата принятия исходной попытки submit, по ней рассчитывают возраст бизнеса и plannedEndDate.
-            При техническом retry сохраняется. Не обязана совпадать с calculationDate черновика или датой кредитного
-            отчёта; reportingPeriod закреплён при создании черновика отдельно.
+          description: UTC-дата принятия исходной попытки submit, по ней рассчитывают возраст бизнеса и plannedEndDate. При
+            техническом retry сохраняется. Не обязана совпадать с calculationDate черновика или датой кредитного отчёта; reportingPeriod
+            закреплён при создании черновика отдельно.
         businessAgeMonths:
           type: integer
           minimum: 0
@@ -653,6 +660,10 @@ components:
           anyOf:
           - $ref: '#/components/schemas/GovernmentContractFeatures'
           - type: 'null'
+        cashBalance:
+          $ref: '#/components/schemas/Money'
+          description: Подтверждённый свободный денежный остаток до нового финансирования. Не включает сумму нового кредита,
+            заложенные или недоступные деньги; неизвестный остаток нельзя заменять нулём.
       required:
       - productCode
       - currency
@@ -667,6 +678,7 @@ components:
       - projectBudget
       - trancheTermMonths
       - governmentContract
+      - cashBalance
       allOf:
       - if:
           properties:
@@ -780,22 +792,9 @@ components:
               type: integer
               minimum: 1
               maximum: 12
-      - properties:
-          creditHistory:
-            if:
-              properties:
-                status:
-                  const: AVAILABLE
-              required:
-              - status
-            then:
-              properties:
-                overdueDebtAmount:
-                  const: '0.00'
-      description: Схема признаков 3 для пяти продуктов. Исходные данные из input_snapshot, профиль из credit_history_snapshot.profile.
-        Текущая просрочка отсеивается Java до ML; NO_HISTORY кодируется отдельно. Период 3/6/12 месяцев зависит от продукта.
-        projectBudget только LONG_TERM, trancheTermMonths только REVOLVING_LINE, governmentContract только GOVERNMENT_CONTRACT_LINE.
-        Неприменимые значения null. Python делает preprocessing и оценку риска, а не кредитное решение.
+      description: 'Схема 4: все поля схемы 3 и обязательный cashBalance. averageMonthlyOutflow уже включает действующие долговые
+        платежи; второй раз они не вычитаются. Текущую просрочку проверяют Java и движок правил. NO_HISTORY не заменяется
+        фиктивными суммами. Обязательные банковские проверки, которых нет во входе, выполняет Java.'
     ScoringRequest:
       type: object
       additionalProperties: false
@@ -808,7 +807,7 @@ components:
           format: uuid
         featureSchemaVersion:
           type: string
-          const: '3'
+          const: '4'
         features:
           $ref: '#/components/schemas/ScoringFeatures'
       required:
@@ -825,18 +824,23 @@ components:
           format: uuid
         featureSchemaVersion:
           type: string
-          const: '3'
+          const: '4'
         modelVersion:
           type: string
           minLength: 1
           maxLength: 128
           pattern: '[\s\S]*\S[\s\S]*'
+          description: Версия алгоритма, контракта, каталога и параметров. Имя поля сохранено для совместимости; обученной
+            модели нет.
         riskScore:
           type: number
           minimum: 0
           maximum: 1
-          description: Чем больше, тем выше риск. Конечное число [0,1]; NaN/Infinity запрещены JSON. Не объявляется калиброванной
-            PD без отдельного обоснования.
+          description: 'Бинарный индекс выполнения правил: 0.0 — правила пройдены; 1.0 — нарушены. Не PD и не прогноз вероятности
+            дефолта. Для совместимости Java использует riskScore < 0.5.'
+          enum:
+          - 0.0
+          - 1.0
       required:
       - assessmentId
       - featureSchemaVersion
@@ -856,7 +860,7 @@ components:
           pattern: '[\s\S]*\S[\s\S]*'
         featureSchemaVersion:
           type: string
-          const: '3'
+          const: '4'
         supportedProductCodes:
           type: array
           items:
@@ -901,8 +905,8 @@ components:
       - executionEndDate
       - finalPaymentDate
       - plannedEndDate
-      description: Нормализованные данные контракта; plannedEndDate = asOfDate исходной попытки + termMonths. Номер и
-        текст в ML не передаются. Java проверяет аванс, 70% чистой суммы и календарные сроки; Python перепроверяет семантику
+      description: Нормализованные данные контракта; plannedEndDate = asOfDate исходной попытки + termMonths. Номер и текст
+        в скоринг не передаются. Java проверяет аванс, 70% чистой суммы и календарные сроки; Python перепроверяет семантику
         признаков.
   responses:
     BadRequest:

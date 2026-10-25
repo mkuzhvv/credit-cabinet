@@ -10,10 +10,26 @@ import com.creditcabinet.credit.model.CreditApplication;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.jpa.repository.Lock;
+import jakarta.persistence.LockModeType;
 
 public interface CreditApplicationRepository extends JpaRepository<CreditApplication, UUID> {
 
     Optional<CreditApplication> findByIdAndCompanyId(UUID id, UUID companyId);
+
+    boolean existsByIdAndCompanyId(UUID id, UUID companyId);
+
+    @Lock(LockModeType.PESSIMISTIC_READ)
+    @Query("SELECT a FROM CreditApplication a WHERE a.id = :id AND a.companyId = :companyId")
+    Optional<CreditApplication> findForAssistant(UUID id, UUID companyId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM CreditApplication a WHERE a.id = :id AND a.companyId = :companyId")
+    Optional<CreditApplication> findForUpdate(UUID id, UUID companyId);
+
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("SELECT a FROM CreditApplication a WHERE a.id = :id")
+    Optional<CreditApplication> findForProcessing(UUID id);
 
     @Query("""
             SELECT new com.creditcabinet.credit.api.ApplicationSummary(

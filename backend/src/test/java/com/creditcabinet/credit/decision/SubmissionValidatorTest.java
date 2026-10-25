@@ -38,7 +38,7 @@ class SubmissionValidatorTest {
     void requiresCommonFieldsAndDoesNotRoundInputMoney() {
         SubmissionContext input = context("WORKING_CAPITAL");
         assertThat(validate(input, ApplicationForm.empty())).extracting(FieldIssue::field)
-                .contains("form.amount", "form.termMonths", "form.averageMonthlyInflow", "form.averageMonthlyOutflow");
+                .contains("form.amount", "form.termMonths", "form.averageMonthlyInflow", "form.averageMonthlyOutflow", "form.cashBalance");
         assertField(validate(input, financing(input.form(), money("100000.001"), 3)), "form.amount");
         assertField(validate(input, inflow(input.form(), "-0.01")), "form.averageMonthlyInflow");
         assertField(validate(input, inflow(input.form(), "1000000000000.00")), "form.averageMonthlyInflow");
@@ -73,10 +73,10 @@ class SubmissionValidatorTest {
         SubmissionContext input = context("LONG_TERM");
         ApplicationForm form = input.form();
         ApplicationForm missing = new ApplicationForm(form.amount(), form.termMonths(), form.averageMonthlyInflow(),
-                form.averageMonthlyOutflow(), "  ", money("0.00"), null, null);
+                form.averageMonthlyOutflow(), "  ", money("0.00"), null, null, form.cashBalance());
         assertThat(validate(input, missing)).extracting(FieldIssue::field).contains("form.financingPurpose", "form.projectBudget");
         ApplicationForm lowBudget = new ApplicationForm(money("5000000.00"), 60, form.averageMonthlyInflow(),
-                form.averageMonthlyOutflow(), "Расширение", money("1.00"), null, null);
+                form.averageMonthlyOutflow(), "Расширение", money("1.00"), null, null, form.cashBalance());
         assertThat(validate(input, lowBudget)).isEmpty();
     }
 
@@ -86,7 +86,7 @@ class SubmissionValidatorTest {
         SubmissionContext input = context("REVOLVING_LINE");
         ApplicationForm form = input.form();
         List<FieldIssue> issues = validate(input, new ApplicationForm(form.amount(), 24, form.averageMonthlyInflow(),
-                form.averageMonthlyOutflow(), null, null, term, null));
+                form.averageMonthlyOutflow(), null, null, term, null, form.cashBalance()));
         assertThat(issues.isEmpty()).isEqualTo(valid);
         if (!valid) {
             assertField(issues, "form.trancheTermMonths");
@@ -98,7 +98,7 @@ class SubmissionValidatorTest {
         SubmissionContext input = context("WORKING_CAPITAL");
         ApplicationForm form = input.form();
         assertThat(validate(input, new ApplicationForm(form.amount(), 3, form.averageMonthlyInflow(), form.averageMonthlyOutflow(),
-                "Цель", money("1.00"), 3, contract("20000000.00", "0.00", DATE, DATE.plusYears(1)))))
+                "Цель", money("1.00"), 3, contract("20000000.00", "0.00", DATE, DATE.plusYears(1)), form.cashBalance())))
                 .extracting(FieldIssue::field).contains("form.financingPurpose", "form.projectBudget", "form.trancheTermMonths", "form.governmentContract");
     }
 
@@ -138,6 +138,20 @@ class SubmissionValidatorTest {
 
     private List<FieldIssue> validate(SubmissionContext input, ApplicationForm form) {
         return validator.validate(withForm(input, form));
+    }
+
+    @Test
+    void requiresKnownCashBalanceAndAcceptsRealZero() {
+        SubmissionContext input = context("WORKING_CAPITAL");
+        ApplicationForm form = input.form();
+        for (String value : List.of("-0.01", "0.001", "1000000000000.00")) {
+            ApplicationForm invalid = new ApplicationForm(form.amount(), form.termMonths(), form.averageMonthlyInflow(), form.averageMonthlyOutflow(),
+                    null, null, null, null, money(value));
+            assertField(validate(input, invalid), "form.cashBalance");
+        }
+        ApplicationForm zero = new ApplicationForm(form.amount(), form.termMonths(), form.averageMonthlyInflow(), form.averageMonthlyOutflow(),
+                null, null, null, null, money("0.00"));
+        assertThat(validate(input, zero)).isEmpty();
     }
 
     private void assertField(List<FieldIssue> issues, String field) {

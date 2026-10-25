@@ -11,7 +11,7 @@ import com.creditcabinet.credit.model.ApplicationForm;
 import com.creditcabinet.credit.model.ApplicationForm.GovernmentContractForm;
 import com.creditcabinet.credit.model.ReportingPeriod;
 
-final class DecisionTestData {
+public final class DecisionTestData {
 
     static final LocalDate DATE = LocalDate.of(2026, 10, 25);
 
@@ -29,12 +29,12 @@ final class DecisionTestData {
         };
     }
 
-    static SubmissionContext context(String code) {
+    public static SubmissionContext context(String code) {
         ProductTerms terms = terms(code);
         ApplicationForm form = new ApplicationForm(terms.minAmount(), terms.minTermMonths(), money("10000000.00"), money("800000.00"),
                 code.equals("LONG_TERM") ? "Расширение пекарни" : null, code.equals("LONG_TERM") ? money("600000.00") : null,
                 code.equals("REVOLVING_LINE") ? 3 : null,
-                code.equals("GOVERNMENT_CONTRACT_LINE") ? contract("20000000.00", "0.00", DATE, DATE.plusYears(1)) : null);
+                code.equals("GOVERNMENT_CONTRACT_LINE") ? contract("20000000.00", "0.00", DATE, DATE.plusYears(1)) : null, money("1000000.00"));
         LocalDate start = switch (terms.financialPeriodMonths()) {
             case 3 -> LocalDate.of(2026, 7, 1);
             case 6 -> LocalDate.of(2026, 4, 1);
@@ -51,16 +51,16 @@ final class DecisionTestData {
 
     static ApplicationForm financing(ApplicationForm form, BigDecimal amount, Integer term) {
         return new ApplicationForm(amount, term, form.averageMonthlyInflow(), form.averageMonthlyOutflow(),
-                form.financingPurpose(), form.projectBudget(), form.trancheTermMonths(), form.governmentContract());
+                form.financingPurpose(), form.projectBudget(), form.trancheTermMonths(), form.governmentContract(), form.cashBalance());
     }
 
     static ApplicationForm inflow(ApplicationForm form, String value) {
         return new ApplicationForm(form.amount(), form.termMonths(), money(value), form.averageMonthlyOutflow(),
-                form.financingPurpose(), form.projectBudget(), form.trancheTermMonths(), form.governmentContract());
+                form.financingPurpose(), form.projectBudget(), form.trancheTermMonths(), form.governmentContract(), form.cashBalance());
     }
 
     static ApplicationForm government(ApplicationForm form, GovernmentContractForm contract) {
-        return new ApplicationForm(form.amount(), form.termMonths(), form.averageMonthlyInflow(), form.averageMonthlyOutflow(), null, null, null, contract);
+        return new ApplicationForm(form.amount(), form.termMonths(), form.averageMonthlyInflow(), form.averageMonthlyOutflow(), null, null, null, contract, form.cashBalance());
     }
 
     static GovernmentContractForm contract(String cost, String advance, LocalDate execution, LocalDate payment) {

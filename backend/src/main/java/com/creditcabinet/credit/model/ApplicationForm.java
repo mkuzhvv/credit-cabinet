@@ -21,10 +21,17 @@ public record ApplicationForm(
         @JsonProperty(required = true) @Size(min = 1, max = 1000) @Pattern(regexp = "[\\s\\S]*\\S[\\s\\S]*") String financingPurpose,
         @JsonProperty(required = true) @MoneyJson @Schema(type = "string", nullable = true) BigDecimal projectBudget,
         @JsonProperty(required = true) @Min(1) @Max(600) Integer trancheTermMonths,
-        @JsonProperty(required = true) @Valid GovernmentContractForm governmentContract) {
+        @JsonProperty(required = true) @Valid GovernmentContractForm governmentContract,
+        @JsonProperty(required = true) @MoneyJson @Schema(type = "string", nullable = true,
+                description = "Свободные собственные деньги до нового кредита; неизвестное значение остаётся null") BigDecimal cashBalance) {
 
     public static ApplicationForm empty() {
-        return new ApplicationForm(null, null, null, null, null, null, null, null);
+        return new ApplicationForm(null, null, null, null, null, null, null, null, null);
+    }
+
+    public ApplicationForm withAverageMonthlyInflow(BigDecimal inflow) {
+        return new ApplicationForm(amount, termMonths, inflow, averageMonthlyOutflow, financingPurpose,
+                projectBudget, trancheTermMonths, governmentContract, cashBalance);
     }
 
     public record GovernmentContractForm(

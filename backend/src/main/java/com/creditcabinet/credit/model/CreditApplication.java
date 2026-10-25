@@ -45,6 +45,8 @@ public class CreditApplication {
     private BigDecimal averageMonthlyInflow;
     @Column(name = "average_monthly_outflow", precision = 14, scale = 2)
     private BigDecimal averageMonthlyOutflow;
+    @Column(name = "cash_balance", precision = 14, scale = 2)
+    private BigDecimal cashBalance;
     @Column(name = "calculation_date", nullable = false)
     private LocalDate calculationDate;
     @Column(name = "financing_purpose", length = 1000)
@@ -98,6 +100,7 @@ public class CreditApplication {
         termMonths = form.termMonths();
         averageMonthlyInflow = form.averageMonthlyInflow();
         averageMonthlyOutflow = form.averageMonthlyOutflow();
+        cashBalance = form.cashBalance();
         financingPurpose = form.financingPurpose();
         projectBudget = form.projectBudget();
         trancheTermMonths = form.trancheTermMonths();
@@ -117,7 +120,19 @@ public class CreditApplication {
                         governmentAdvanceAmount, governmentExecutionEndDate, governmentFinalPaymentDate)
                 : null;
         return new ApplicationForm(amount, termMonths, averageMonthlyInflow, averageMonthlyOutflow,
-                financingPurpose, projectBudget, trancheTermMonths, contract);
+                financingPurpose, projectBudget, trancheTermMonths, contract, cashBalance);
+    }
+
+    public void startAssessment(UUID assessmentId, Instant now) {
+        currentAssessmentId = assessmentId;
+        status = ApplicationStatus.CHECKING;
+        lastSubmittedAt = now.truncatedTo(ChronoUnit.MICROS);
+        updatedAt = lastSubmittedAt;
+    }
+
+    public void finishAssessment(ApplicationStatus outcome, Instant now) {
+        status = outcome;
+        updatedAt = now.truncatedTo(ChronoUnit.MICROS);
     }
 
     public ReportingPeriod getReportingPeriod() {

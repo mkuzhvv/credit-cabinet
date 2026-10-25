@@ -65,6 +65,17 @@ public class IdempotencyRepository {
                 """, claim.recordId(), claim.token()) == 1;
     }
 
+    boolean lockClaim(IdempotencyResult.Claim claim) {
+        return !jdbc.query("""
+                WITH owned AS MATERIALIZED (
+                    SELECT id, locked_until FROM idempotency_record
+                    WHERE id = ? AND status = 'IN_PROGRESS' AND claim_token = ?
+                    FOR UPDATE
+                )
+                SELECT id FROM owned WHERE locked_until > clock_timestamp()
+                """, (row, index) -> row.getObject("id", UUID.class), claim.recordId(), claim.token()).isEmpty();
+    }
+
     int deleteExpired() {
         return jdbc.update("""
                 DELETE FROM idempotency_record

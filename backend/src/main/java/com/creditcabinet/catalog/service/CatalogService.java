@@ -12,6 +12,7 @@ import com.creditcabinet.catalog.model.ProductTerms.RevolvingLineRules;
 import com.creditcabinet.catalog.persistence.CreditProductRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.annotation.Propagation;
 
 @Service
 @Transactional(readOnly = true)
@@ -35,6 +36,11 @@ public class CatalogService {
 
     public Optional<ProductView> findProduct(String code) {
         return products.findById(code).map(this::toView);
+    }
+
+    @Transactional(propagation = Propagation.MANDATORY)
+    public Optional<ProductView> findActiveProductForSubmission(String code) {
+        return products.findActiveForSubmission(code).map(this::toView);
     }
 
     public Optional<ProductTerms> findActiveProductTerms(String code) {

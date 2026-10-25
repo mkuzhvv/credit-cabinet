@@ -7,6 +7,10 @@ spring:
     exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   jackson:
     time-zone: UTC
+  ai:
+    model:
+      chat: none
+      embedding: none
   datasource:
     url: ${DB_URL:jdbc:postgresql://localhost:5432/credit_cabinet}
     username: ${DB_USERNAME:credit_cabinet}
@@ -18,6 +22,32 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+
+credit:
+  processing:
+    enabled: true
+    poll-delay: 1s
+    lease-duration: 30s
+    credit-history-timeout: 5s
+    retry-delay: 1s
+    max-executions: 3
+
+assistant:
+  timeout: 60s
+  lease-duration: 75s
+  ollama:
+    base-url: http://localhost:11434
+    connect-timeout: 2s
+
+scoring:
+  base-url: http://localhost:8000
+  connect-timeout: 2s
+  timeout: 10s
+  expected-model-version: rules-cashflow-v1-59fdb57552ca
+
+demo:
+  credit-history:
+    scenario: DEFAULT
 
 server:
   servlet:

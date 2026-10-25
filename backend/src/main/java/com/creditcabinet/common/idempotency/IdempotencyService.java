@@ -63,6 +63,11 @@ public class IdempotencyService {
         return records.markRetryableFailure(claim);
     }
 
+    @Transactional(propagation = Propagation.MANDATORY)
+    public boolean lockClaim(IdempotencyResult.Claim claim) {
+        return records.lockClaim(claim);
+    }
+
     @Scheduled(initialDelay = 1, fixedDelay = 1, timeUnit = TimeUnit.HOURS)
     @Transactional
     public int deleteExpired() {
