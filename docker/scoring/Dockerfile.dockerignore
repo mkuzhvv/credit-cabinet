@@ -1,0 +1,10 @@
+**
+!ml/
+!ml/scoring/
+!ml/scoring/requirements.txt
+!ml/scoring/server.py
+!ml/scoring/engine.py
+!ml/scoring/validation.py
+!ml/scoring/policy.json
+!ml/scoring/catalog.json
+!ml/scoring/schema.json

@@ -1,111 +1,82 @@
-# Контракты API и LLM
+# Контракты API
 
-Обновлено 25.10.2026. Backend API **0.5.0**, Scoring API **0.4.0** / `featureSchemaVersion=4`, AssistantContext **v2**, AssistantReply **v1**. Контракты задают будущую реализацию, не доказывают наличие работающих серверов.
+## 1. Артефакты и версии
 
-## Файлы и совместимость
-
-| Файл | Назначение |
+| Материал | Назначение |
 |---|---|
-| [backend.openapi.yaml](backend.openapi.yaml) | 13 операций фронт → Java, cookie/CSRF, пять продуктов и формы |
-| [scoring.openapi.yaml](scoring.openapi.yaml) | Java → Python, признаки схемы 4, readiness, риск и ошибки |
-| [Кредитная политика](../CREDIT_POLICY_AND_ML_REQUIREMENTS.md) | Все числа, периоды, лимиты, даты, порядок правил |
-| [Кредитный профиль](../CREDIT_HISTORY.md) | Провайдер внутри Java, отчёт schemaVersion=1, снимок и повторы |
-| [llm/README.md](llm/README.md) | Java → Spring AI → Ollama, контекст v2 и ответ v1 |
-| [llm/input.schema.json](llm/input.schema.json) / [llm/output.schema.json](llm/output.schema.json) | JSON Schema и примеры ассистента |
+| [backend.openapi.yaml](backend.openapi.yaml) | Backend API 0.5.0, базовый путь `/api/v1` |
+| [scoring.openapi.yaml](scoring.openapi.yaml) | Scoring API 0.4.0, признаки версии `4` |
+| [LLM-контракт](llm/README.md) | AssistantContext v2 и AssistantReply v1 |
+| [input.schema.json](llm/input.schema.json) / [output.schema.json](llm/output.schema.json) | JSON Schema 2020-12 входа и ответа модели |
+| [acceptance-cases.json](llm/acceptance-cases.json) | Смысловые ожидания для помощника |
 
-Оба OpenAPI 3.1.1 самодостаточны, без внешних $ref, диалект JSON Schema 2020-12. Старые формы с equipment, код EQUIPMENT, фиксированные 12 месяцев для всех, ScoringFeatures v2 и AssistantContext v1 не совместимы с текущими входами. Python реализует формальную проверку ликвидности схемы 4. Форма дополнена cashBalance; V4 добавляет nullable-столбец без выдуманных остатков.
+Спецификации в Git определяют согласованные форматы. При запущенном Java Swagger доступен по `/swagger-ui/index.html`, runtime OpenAPI — по `/v3/api-docs`. Запуск и внутренние адреса описаны в [Docker](../../docker/README.md).
 
-## Общие форматы
+## 2. Общие форматы
 
-CamelCase; неизвестные поля запросов отклоняются по схемам. Деньги — строки RUB с двумя знаками, внутри BigDecimal, без молчаливого округления. UUID; timestamp UTC с Z; даты YYYY-MM-DD. Версии/sequence в пределах безопасного целого JavaScript. Ошибки application/problem+json с code/requestId и полями errors по необходимости; неизвестные расширения ответов игнорируются, тексты не используются для ветвления.
+- UUID — строка идентификатора, в том числе Idempotency-Key.
+- Деньги — строки RUB с двумя знаками после точки, диапазон `0.00..999999999999.99`; для полей суммы финансирования требуется положительное значение.
+- Время — UTC с `Z`; календарные даты — `YYYY-MM-DD`.
+- Версии и sequence — целые в безопасном диапазоне JavaScript, до `9007199254740991`.
+- Неизвестные данные — null, известный ноль — `"0.00"`.
+- JSON разбирается строго; некорректный тип не исправляется неявно.
 
-## Операции фронтенда
+Ошибка имеет тип `application/problem+json`: type, title, status, instance, code, requestId и при необходимости errors с field/code/message. `X-Request-Id` связывает ответ с логами, но не управляет повтором бизнес-команды. API использует `Cache-Control: no-store`.
 
-Все пути относительно /api/v1:
+## 3. Сессия и CSRF
 
-| Метод и путь | Результат |
-|---|---|
-| GET /csrf | Анонимная сессия и CSRF |
-| POST /demo/session | Демовход с cookie и CSRF |
-| GET /me | Пользователь, компания и серверные демопризнаки счёта/регулярности |
-| GET /products | Все пять продуктов с условиями и правилами |
-| POST /applications | Новый черновик, 201 |
-| GET /applications | Ограниченный список своих заявок |
-| GET /applications/{applicationId} | Состояние, форма, calculationDate, reportingPeriod, результат |
-| PUT /applications/{applicationId}/form | Полная замена формы с expectedVersion |
-| POST /applications/{applicationId}/submit | Приём рассмотрения, 202 |
-| POST /applications/{applicationId}/retry | Технический повтор, 202 |
-| POST /assistant/conversations | Диалог, 201 |
-| GET /assistant/conversations/{conversationId}/messages | История afterSequence/limit |
-| POST /assistant/conversations/{conversationId}/messages | Атомарная пара вопрос/ответ, 200 |
+`GET /csrf → POST /demo/session → GET /csrf → GET /me`.
 
-## Сессия и права
+Клиент сохраняет cookie JSESSIONID и передаёт `X-CSRF-TOKEN` для изменяющих запросов. После входа сессия и CSRF обновляются. Отсутствие сессии даёт 401, неверный CSRF — 403. Чужие заявки и диалоги скрываются через 404.
 
-Последовательность: GET /csrf → POST /demo/session с cookie/X-CSRF-TOKEN → новый GET /csrf → защищённые запросы. JWT, пароль и экран входа отсутствуют. Cookie JSESSIONID: HttpOnly, Path=/, SameSite=Lax, Secure при HTTPS. Защищённый API без сессии возвращает 401, не выполняет молчаливый вход. Чужой и отсутствующий ресурс дают одинаковый 404. Предпочтителен общий origin через proxy; разные origin требуют credentials:include и конкретного разрешённого origin.
+Демовход доступен в профиле demo и не требует Idempotency-Key. Команды создания/отправки/повтора заявки и создания/отправки сообщения диалога требуют UUID-ключ.
 
-## Продукты и форма
+## 4. Маршруты Java
 
-Коды: WORKING_CAPITAL, OVERDRAFT, REVOLVING_LINE, LONG_TERM, GOVERNMENT_CONTRACT_LINE. Коды расширяемы, но новый продукт требует явной поддержки формы/политики/модели. amount — сумма для разовой выдачи, лимит для линий/овердрафта. termMonths — срок кредита/линии, не транша и не долга по овердрафту.
+Все пути таблицы дополняют `/api/v1`.
 
-Все ключи ApplicationForm обязательны, null означает незаполненное/очищенное значение:
+| Метод | Путь | Результат |
+|---|---|---|
+| GET | `/csrf` | Токен и имя CSRF-заголовка |
+| POST | `/demo/session` | Демовход |
+| GET | `/me` | Текущий пользователь и компания |
+| GET | `/products` | Действующий каталог |
+| POST | `/applications` | Создание DRAFT, 201 |
+| GET | `/applications` | Список компании: page, size, status |
+| GET | `/applications/{id}` | Карточка заявки |
+| PUT | `/applications/{id}/form` | Полная замена формы |
+| POST | `/applications/{id}/submit` | Принятие в CHECKING, 202 |
+| POST | `/applications/{id}/retry` | Технический повтор, 202 |
+| POST | `/assistant/conversations` | Создание диалога без тела, 201 |
+| GET | `/assistant/conversations/{id}/messages` | История после sequence |
+| POST | `/assistant/conversations/{id}/messages` | Вопрос и успешная пара сообщений, 200 |
 
-| Поле | Применимость |
-|---|---|
-| amount, termMonths, averageMonthlyInflow, averageMonthlyOutflow | Все продукты |
-| financingPurpose, projectBudget | Только LONG_TERM; цель и положительный бюджет при submit |
-| trancheTermMonths | Только REVOLVING_LINE; 3–6 при submit |
-| governmentContract | Только GOVERNMENT_CONTRACT_LINE; lawCode=44_FZ, номер, стоимость, аванс, даты исполнения/оплаты |
+Список заявок по умолчанию page=0, size=20, максимум size=100, порядок updatedAt DESC / id DESC. История чата: afterSequence=0, limit=50, максимум 100; следующие страницы читаются по последнему sequence.
 
-Неприменимые поля null; частичная применимая форма разрешена в DRAFT. Продукт у существующей заявки не меняется. Старое equipment удалено: долгосрочный продукт подходит также ремонту и расширению, покупки оборудования не обязательны.
+## 5. Заявка и версии
 
-Server calculationDate — UTC-дата создания черновика. reportingPeriod — полные месяцы до её месяца: OVERDRAFT 3, WORKING_CAPITAL/REVOLVING_LINE 6, LONG_TERM/GOVERNMENT_CONTRACT_LINE 12. Дата и период не сдвигаются на submit/retry. Поступления исключают новые кредиты, вложения собственника и внутренние переводы; расходы включают действующие обязательства, исключают будущий платёж и внутренние переводы.
+Создание принимает productCode. PUT принимает expectedVersion и полную форму из девяти ключей; пример — в [документации интерфейса](../FRONTEND.md).
 
-Овердрафт: срок лимита фиксирован 12 месяцев, погашение долга максимум за 30 дней с первого использования. Возобновляемая линия: 24 месяца и отдельно выбранный срок транша 3–6, возврат не позднее конца линии. MVP не обслуживает фактические транши и платежи.
+Submit принимает expectedVersion, expectedProductTermsVersion и clarificationResponses, если требуется. Версия условий находится в `product.terms.version`. Retry принимает expectedVersion и повторяет сохранённую попытку.
 
-Госконтракт: срок 1–12 месяцев; plannedEndDate = asOfDate исходной попытки + termMonths календарных месяцев. Проверяются даты и предел 70% × (стоимость−аванс), не 70% стоимости минус аванс. Овердрафт ограничен 30% среднего за 3 месяца. Динамические пределы округляются вниз до копейки; превышение даёт 422 с полем, сумма автоматически не уменьшается. При исчерпанном пределе нельзя рекомендовать выдумать поступления.
+Карточка содержит version, status, product, form, calculationDate, reportingPeriod, assessmentId, decision, requiredInformation, processingError, allowedActions и даты.
 
-PUT — полная замена с expectedVersion; перед submit фронт дожидается сохранения. Конфликт версии — 409 VERSION_CONFLICT; изменённые условия — 409 PRODUCT_TERMS_CHANGED по expectedProductTermsVersion. Локальный несохранённый ввод фронт сохраняет для пользователя, не перезаписывает молча.
+Статусы: DRAFT, CHECKING, NEEDS_INFO, TECHNICAL_HOLD, APPROVED, DECLINED. Ошибки JSON — 400, валидации — 422, конфликты версии/состояния/ключа — 409. Принятие submit не означает одобрение: итог читается отдельным GET.
 
-## Рассмотрение и ошибки
+Для уточнения нулевых поступлений передаются clarificationId и response: CONFIRM_VALUE либо VALUE_CORRECTED. Исправление сначала сохраняется PUT. Полные ограничения — в [кредитной политике](../CREDIT_POLICY_AND_ML_REQUIREMENTS.md).
 
-Состояния прежние: DRAFT, CHECKING, NEEDS_INFO, TECHNICAL_HOLD, APPROVED, DECLINED. submit атомарно создаёт попытку/снимок/задание и возвращает 202 с statusUrl/pollAfterSeconds. Фронт опрашивает примерно раз в 2 секунды и прекращает после выхода из CHECKING/ухода со страницы. DECLINED и TECHNICAL_HOLD читаются с HTTP 200.
+## 6. Безопасные повторы
 
-Порядок: обязательные правила возраста/счёта/регулярности → получение и сохранение кредитного профиля → текущая просрочка → подтверждение нуля → формальный скоринг Python → порог. Причины отказа до скоринга: BUSINESS_TOO_YOUNG, SETTLEMENT_ACCOUNT_REQUIRED, REGULAR_INFLOW_REQUIRED, CURRENT_OVERDUE_DEBT. Низкий риск не отменяет их. Текущая просрочка >0 отсекается до запроса подтверждения нуля; прошлые погашенные просрочки сохраняются в признаках, но текущий алгоритм не вводит для них отдельного отказа.
+Ключ действует в области пользователя, компании, операции и ресурса. Тот же ключ с тем же DTO после успеха возвращает сохранённый ответ. Изменённое тело под тем же ключом и активная конкурирующая команда дают 409.
 
-Ошибка профиля: CREDIT_HISTORY_UNAVAILABLE/TIMEOUT/INVALID_RESPONSE с полным префиксом CREDIT_HISTORY_, исход TECHNICAL_HOLD; скоринг не вызывается. Ошибка скоринга: SCORING_UNAVAILABLE/TIMEOUT/INVALID_RESPONSE с префиксом SCORING_. Исчерпание восстановления: PROCESSING_INTERRUPTED. Технические сбои не превращаются в отказ или просьбу изменить данные.
+Доступ проверяется раньше повтора. Успешный повтор возвращается раньше проверок текущей версии и состояния. В хеш не входят cookie, CSRF и requestId. В сохранённом ответе нет cookie; успешный результат хранится не менее 24 часов.
 
-## Уточнение нулевых поступлений
+Новый пользовательский шаг требует нового ключа. Сетевой повтор того же неопределённого результата сохраняет прежний ключ.
 
-Только ZERO_INFLOW_CONFIRMATION по form.averageMonthlyInflow, после получения отчёта и отсутствия текущей просрочки, до ML. Вопрос содержит clarificationId, исходный observedValue=0.00 и связан с исходной попыткой/периодом. CONFIRM_VALUE требует сохранённого нуля. VALUE_CORRECTED требует сначала сохранить положительное значение PUT, затем submit с новой версией и прежним clarificationId.
+## 7. Скоринг и помощник
 
-Сохранение формы само вопрос не закрывает. Ответ/новая попытка/переход/задание атомарны, исходный вопрос и снимок остаются. Технический retry переносит применимое подтверждение и уже полученный кредитный отчёт. Новый submit после уточнения получает профиль для новой попытки.
+Java проверяет readiness Python, затем вызывает `POST /internal/v1/assessments`. Схема 4, ожидаемая версия `rules-cashflow-v1-59fdb57552ca`, результат 0/1. Общий бюджет readiness + расчёта — 10 секунд. Технический сбой даёт TECHNICAL_HOLD.
 
-Нет ответа — 422 CLARIFICATION_RESPONSE_REQUIRED; несовместимый/повторный ответ — 422 CLARIFICATION_RESPONSE_CONFLICT; неожиданный ответ в DRAFT — 422 CLARIFICATION_NOT_EXPECTED; устаревший вопрос — 409 CLARIFICATION_STALE. Доступ проверяется первым, успешный идемпотентный повтор — до версий и актуальности вопроса. Подтверждение не гарантирует одобрение.
+Сообщение чата содержит text и context с тремя обязательными nullable-ключами: applicationId, productCode, fieldCode. Модельный JSON возвращает answer и recommendedProductCode; HTTP API — conversationId, userMessage и assistantMessage. Сохранение пары происходит только после валидного результата.
 
-## Повторы команд
-
-Idempotency-Key обязателен для создания заявки, submit, retry, создания диалога и отправки сообщения. Один UUID на действие; сетевой повтор использует тот же ключ и тело. Область: пользователь+компания+операция+ресурс; смена сессии не обнуляет её. Тот же ключ/тело возвращает исходный успешный status/body/значимые headers; другое тело — 409 IDEMPOTENCY_KEY_REUSED. Права проверяются раньше повтора, версии позже.
-
-Успех хранится минимум 24 часа в PostgreSQL. IN_PROGRESS имеет токен/срок захвата, активные записи не очищаются. Старый исполнитель после потери токена не фиксирует результат. Ошибка LLM не считается успешным ответом, повтор того же ключа разрешён. Новый ключ не обходит единственную активную попытку/генерацию.
-
-## Скоринг
-
-Java вызывает POST /internal/v1/assessments синхронно из фонового обработчика; бюджет 10 секунд. Схема 3: все пять кодов, период по продукту, projectBudget/trancheTermMonths/governmentContract по применимости и creditHistory. Свободный текст цели, номер контракта, cookie, подтверждения пользователя и метаданные отчёта в признаки не передаются.
-
-Исходные данные из input_snapshot версии 2; profile из credit_history_snapshot с внутренним отчётом версии 1. AVAILABLE содержит показатели и текущую просрочку 0.00 для запроса ML; положительная просрочка допустима у провайдера, но Java по ней уже отказывает. NO_HISTORY передаёт четыре null и кодируется отдельно. Исторический период просрочек по-прежнему 12 месяцев, независимо от 3/6/12 месяцев формы.
-
-Java проверяет assessmentId, featureSchemaVersion=4, закреплённую версию алгоритма и riskScore строго 0 или 1. Старая схема/версия/невалидный ответ — технический сбой. HTTP 400/422 Python не превращается в NEEDS_INFO. Python не читает нашу БД и не получает данные сам. Readiness подтверждает схему 4 и все пять продуктов; правила загружаются до ready.
-
-Формальный сервис возвращает riskScore 0.0/1.0 и использует порог 0.50. Это результат расчётных правил, а не оценка обученной ML-модели. Поле modelVersion содержит версию алгоритма и параметров; неожиданная версия отклоняется.
-
-## Помощник
-
-AssistantContext v2: каталог пяти продуктов с financingType/financialPeriodMonths, определения полей, разрешённый контекст заявки с calculationDate/reportingPeriod. AssistantReply v1 по-прежнему ровно answer и recommendedProductCode. Кредитный отчёт в LLM не передаётся. Детали и 36 контрольных вопросов в [LLM-контракте](llm/README.md).
-
-Один активный запрос диалога. История sequence/afterSequence/limit; атомарная пара USER+ASSISTANT только после валидного ответа. При ошибке полупара не добавляется, введённый текст хранит фронт до успеха. Модель вызывается вне транзакции; проверяются токены/сроки генерации и ключа. Бюджет всей операции 60 секунд, не только read timeout. Streaming и tool calls отсутствуют.
-
-## Проверки
-
-Проверяются OpenAPI, JSON Schema 2020-12, ссылки и все встроенные примеры. Дополнительно: пять форм, 3/6/12 месяцев, CURRENT_OVERDUE_DEBT до ML, пределы/даты, старые версии, неправильные продуктовые поля и попытка подменить кредитный профиль. Межполевые суммы/даты, права, атомарность и восстановление требуют реализации/тестов Java и Python, одной схемой не доказываются. Реальный прогон моделей и измерения — отдельная ответственность ML и команды.
-
-В Backend API 0.5.0 добавлен form.cashBalance (свободные собственные деньги до нового кредита). Полная форма содержит девять ключей. Null допустим в черновике, при submit значение обязательно для всех продуктов; неизвестный остаток нельзя подменять нулём. Связка скоринга: Scoring API 0.4.0, схема 4, бинарный результат 0/1 и фиксированный порог 0.50.
+Бюджет чата — 60 секунд. Ошибки: 503 ASSISTANT_UNAVAILABLE, 502 ASSISTANT_INVALID_RESPONSE, 504 ASSISTANT_TIMEOUT. Streaming и tool calls не используются. Подробности — в [LLM-контракте](llm/README.md).

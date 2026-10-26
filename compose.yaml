@@ -1,0 +1,106 @@
+name: credit-cabinet-dev
+
+services:
+  postgres:
+    image: postgres:18.6-alpine
+    container_name: credit-cabinet-db
+    environment:
+      POSTGRES_DB: credit_cabinet
+      POSTGRES_USER: credit_cabinet
+      POSTGRES_HOST_AUTH_METHOD: trust
+      TZ: UTC
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$$POSTGRES_USER\" -d \"$$POSTGRES_DB\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  scoring:
+    build:
+      context: .
+      dockerfile: docker/scoring/Dockerfile
+    image: credit-cabinet-scoring:local
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=2).close()"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  ollama:
+    build:
+      context: .
+      dockerfile: docker/llm/Dockerfile
+    image: credit-cabinet-llm:local
+    environment:
+      OLLAMA_HOST: 0.0.0.0:11434
+      OLLAMA_VULKAN: "0"
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /tmp/ollama-ready && curl --fail --silent --max-time 3 http://127.0.0.1:11434/api/tags >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 40m
+
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    image: credit-cabinet-backend:local
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/credit_cabinet
+      DB_USERNAME: credit_cabinet
+      DB_PASSWORD: ""
+      SCORING_BASE_URL: http://scoring:8000
+      ASSISTANT_OLLAMA_BASE_URL: http://ollama:11434
+      SERVER_FORWARD_HEADERS_STRATEGY: framework
+    depends_on:
+      postgres:
+        condition: service_healthy
+      scoring:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+    restart: unless-stopped
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "--max-time", "3", "http://127.0.0.1:8080/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
+
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    image: credit-cabinet-frontend:local
+    ports:
+      - "127.0.0.1:${APP_PORT:-8080}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1/health"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres-data:
+    name: credit-cabinet-db-data
+  ollama-data:
+    name: credit-cabinet-ollama-data
