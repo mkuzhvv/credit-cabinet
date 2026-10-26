@@ -33,7 +33,7 @@
 
 ## Источники конфигурации
 
-- [compose.yaml](../compose.yaml) — сервисы и контейнерные адреса.
+- [compose.yaml](../compose.yaml) — четыре контейнерных сервиса и адрес внешней Ollama.
 - [application.yaml](../backend/src/main/resources/application.yaml) — значения по умолчанию, бюджеты и закреплённая версия скоринга.
 - [Миграции Flyway](../backend/src/main/resources/db/migration/) — фактическая структура и начальные данные.
 - [Конфигурация помощника](../backend/src/main/resources/assistant/config.json) — модель, digest, промпт и генерация.

@@ -107,7 +107,9 @@ export default function AssistantWidget({
     } catch (error) {
       if (error.status === 404) { conversation.current = null; localStorage.removeItem(conversationKey); }
       if (!customText) setInputText(text);
-      setErrorText(error.title || 'Помощник временно недоступен. Повторите запрос.');
+      setErrorText(error.code === 'ASSISTANT_UNAVAILABLE'
+        ? 'Нет подключения к локальной модели. Проверьте, что Ollama запущена и модель загружена. Заполнение и отправка заявки доступны.'
+        : error.title || 'Помощник временно недоступен. Повторите запрос.');
     } finally { sending.current = false; setIsSending(false); }
   };
 

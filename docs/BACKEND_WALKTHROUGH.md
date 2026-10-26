@@ -6,7 +6,7 @@
 
 [CreditCabinetApplication](../backend/src/main/java/com/creditcabinet/CreditCabinetApplication.java) запускает Spring Boot. Spring создаёт контроллеры, сервисы, репозитории, HTTP-клиенты, пулы выполнения и планировщик.
 
-Datasource подключается к PostgreSQL. Flyway применяет недостающие миграции; Hibernate сверяет таблицы с сущностями. В Compose Java запускается после healthcheck БД, Python и подготовленной Ollama. Указанные сервисы уже существуют как отдельные процессы; Java не запускает их сама.
+Datasource подключается к PostgreSQL. Flyway применяет недостающие миграции; Hibernate сверяет таблицы с сущностями. В Compose Java запускается после healthcheck БД и Python. Ollama подключается по HTTP с хоста при обращении к помощнику; её готовность не блокирует старт кабинета. Указанные сервисы уже существуют как отдельные процессы; Java не запускает их сама.
 
 ## 2. Общий путь HTTP
 
